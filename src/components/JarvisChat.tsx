@@ -72,6 +72,20 @@ export function JarvisChat({ userId }: { userId: string }) {
     },
     [audioUrl],
   );
+  async function playGreeting() {
+    playback.current?.pause();
+    setVoiceError("");
+    setSpeaking(true);
+    try {
+      const response = await authenticatedFetch("/api/jarvis/voice/greeting");
+      if (!response.ok) throw new Error("greeting_unavailable");
+      setAudioUrl(URL.createObjectURL(await response.blob()));
+    } catch {
+      setVoiceError("Could not load your startup greeting. Please try again.");
+    } finally {
+      setSpeaking(false);
+    }
+  }
   function deviceSpeak(text: string) {
     if (!window.speechSynthesis) {
       setVoiceError("Spoken replies are not available in this browser.");
@@ -386,6 +400,11 @@ export function JarvisChat({ userId }: { userId: string }) {
               )}
             </div>
           </div>
+          {capabilities?.fishVoice && (
+            <button className="read-aloud" disabled={speaking} onClick={playGreeting}>
+              <Volume2 size={16} /> Start JARVIS / play greeting
+            </button>
+          )}
           {audioUrl && (
             <audio
               ref={playback}
@@ -393,7 +412,7 @@ export function JarvisChat({ userId }: { userId: string }) {
               autoPlay
               src={audioUrl}
               className="hud-audio"
-              aria-label="JARVIS Fish Audio reply"
+              aria-label="JARVIS audio playback"
             />
           )}
           {deviceFallback && (

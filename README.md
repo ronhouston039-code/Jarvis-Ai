@@ -71,3 +71,16 @@ npx deepspace deploy --json
 ```
 
 DeepSpace is the source authority. Do not add a GitHub remote without deciding to change source authority before the first release. Production secret changes take effect on the next deploy. Review `deepspace logs`, `activity`, `releases`, and `app usage` after publication. Open in iPhone Safari, sign in, and use Share → Add to Home Screen.
+
+### Owner startup greeting and custom sample voice
+
+The owner can tap **Start JARVIS / play greeting** to play their uploaded MP3.
+Safari requires a user gesture for audio playback. The recording is served through
+`GET /api/jarvis/voice/greeting`, with authentication, owner authorization and
+`Cache-Control: no-store`; it is not a public asset. Replace
+`src/jarvis/startup-audio.ts` to change the bundled owner greeting.
+
+The uploaded recording has also been used to create a private Fish Audio voice.
+Its returned model ID is stored as `VOICE_ID` in the encrypted DeepSpace secrets
+store. Speech generation requires separate Fish API credits, even when voice
+creation succeeds. Startup playback does not require Fish credits.

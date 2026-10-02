@@ -221,9 +221,10 @@ test('scheduled reminders deliver a private notification',async({users})=>{
 
 test('other users cannot spend owner Groq or Fish credentials',async({users})=>{
  const [a]=await users(1);await a.page.goto('/home')
- const results=await a.page.evaluate(async()=>{const path='/src/jarvis/client.ts';const module=await import(path);const caps=await module.authenticatedFetch('/api/jarvis/capabilities');const voice=await module.authenticatedFetch('/api/jarvis/voice/speak',{text:'Do not bill the owner'});return {capabilities:await caps.json(),voiceStatus:voice.status}})
+ const results=await a.page.evaluate(async()=>{const path='/src/jarvis/client.ts';const module=await import(path);const caps=await module.authenticatedFetch('/api/jarvis/capabilities');const voice=await module.authenticatedFetch('/api/jarvis/voice/speak',{text:'Do not bill the owner'});const greeting=await module.authenticatedFetch('/api/jarvis/voice/greeting');return {capabilities:await caps.json(),voiceStatus:voice.status,greetingStatus:greeting.status}})
  expect(results.capabilities.llmMode).toBe('deepspace')
  expect(results.capabilities.fishVoice).toBe(false)
+ expect(results.greetingStatus).toBe(403)
  expect(results.voiceStatus).toBe(403)
 })
 

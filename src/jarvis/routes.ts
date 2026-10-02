@@ -1,3 +1,4 @@
+import { startupAudio } from "./startup-audio";
 import { usesOwnerGroq } from "../ai/groq";
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -239,6 +240,16 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     } catch {
       return c.json({ error: "transcription_unavailable" }, 502);
     }
+  });
+  app.get("/api/jarvis/voice/greeting", async (c) => {
+    const auth = await resolveAuth(c.req.raw, c.env);
+    if (!auth) return c.json({ error: "unauthorized" }, 401);
+    if (auth.userId !== c.env.OWNER_USER_ID)
+      return c.json({ error: "owner_voice_only" }, 403);
+    const audio = Uint8Array.from(atob(startupAudio), (char) => char.charCodeAt(0));
+    return new Response(audio, {
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
+    });
   });
   app.post("/api/jarvis/voice/speak", async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env);
