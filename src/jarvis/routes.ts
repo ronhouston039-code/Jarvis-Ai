@@ -1,3 +1,4 @@
+import { registerConnectionRoutes } from "./connection-routes";
 import { startupAudio } from "./startup-audio";
 import { usesOwnerGroq } from "../ai/groq";
 import type { Hono } from "hono";
@@ -35,7 +36,12 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
   );
   for (const prefix of ["/api/ai/*", "/api/jarvis/*", "/_deepspace/agent/*"])
     app.use(prefix, async (c, next) => {
-      if (c.req.method !== "POST" && c.req.method !== "PATCH") return next();
+      if (
+        c.req.method !== "POST" &&
+        c.req.method !== "PATCH" &&
+        !c.req.path.startsWith("/api/jarvis/connections/")
+      )
+        return next();
       const auth = await (
         c.req.path.startsWith("/_deepspace/agent/")
           ? resolveAgentAuth
@@ -116,6 +122,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     return c.json({
       llmMode: usesOwnerGroq(c.env, auth.userId) ? "groq" : "deepspace",
       chat: !usesOwnerGroq(c.env, auth.userId) || !!c.env.GROQ_API_KEY,
+      voiceMode: "device",
       reminders: true,
       memories: true,
       serverTranscription:
@@ -125,11 +132,13 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
         !!c.env.VOICE_ID &&
         auth.userId === c.env.OWNER_USER_ID,
       integrations: {
-        weather: false,
+        weather: true,
+        news: "BBC",
+        search: "Wikipedia",
         calendar: false,
         email: false,
-        music: false,
-        smartHome: false,
+        music: "iPhone_shortcuts",
+        smartHome: "iPhone_shortcuts",
       },
     });
   });
@@ -246,7 +255,9 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     if (!auth) return c.json({ error: "unauthorized" }, 401);
     if (auth.userId !== c.env.OWNER_USER_ID)
       return c.json({ error: "owner_voice_only" }, 403);
-    const audio = Uint8Array.from(atob(startupAudio), (char) => char.charCodeAt(0));
+    const audio = Uint8Array.from(atob(startupAudio), (char) =>
+      char.charCodeAt(0),
+    );
     return new Response(audio, {
       headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
     });
@@ -291,4 +302,5 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       return c.json({ error: "speech_unavailable" }, 502);
     }
   });
+  registerConnectionRoutes(app);
 }

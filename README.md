@@ -2,7 +2,7 @@
 
 An iPhone-friendly holographic dashboard and personal assistant with streamed AI conversations, tap-to-talk dictation, device spoken replies, private conversation history, explicit preference memory, persistent one-time reminders, notifications, and action-bound deletion confirmations.
 
-This project is the live DeepSpace adaptation. The modular Python backend in the workspace root remains separate. Weather, calendar, email, music, maps, and smart-home integrations are **not connected in this app**. No provider success is simulated in production. Background wake-word detection and push notifications are not implemented. Dictation availability depends on browser/device support; iPhone keyboard dictation is a fallback.
+This project is the live DeepSpace adaptation. The modular Python backend in the workspace root remains separate. Live weather, BBC news and Wikipedia retrieval are available. Apple Home and Apple Music controls use user-registered, explicitly tapped iPhone Shortcuts; direct library access, calendar and email are not connected. No provider success is simulated in production. Background wake-word detection and push notifications are not implemented. Dictation availability depends on browser/device support; iPhone keyboard dictation is a fallback.
 
 ## Run
 
@@ -17,7 +17,7 @@ npm run lint
 npx deepspace test run all
 ```
 
-With `LLM_MODE=groq`, the app owner’s conversations and compaction use Groq with `GROQ_API_KEY`. The default Groq model is `openai/gpt-oss-120b`; `GROQ_MODEL` is an optional server setting. Other users use native DeepSpace chat billed to their own credits; they cannot spend the owner’s Groq/Fish credentials. Groq is bounded to 6 steps, 16 executed tools, 2,048 output tokens, no automatic retry, and a 45-second turn timeout. Native chat uses DeepSpace AI credits billed to the signed-in caller. The default model is the catalog's GPT Luna when available. No exposed API key from a chat transcript is used. In Settings, save your actual timezone before relative-date reminders. Unspecified reminder times prompt clarification.
+With `LLM_MODE=groq`, the app owner’s conversations and compaction use Groq with `GROQ_API_KEY`. The default Groq model is `openai/gpt-oss-120b`; `GROQ_MODEL` is an optional server setting. Other users use native DeepSpace chat billed to their own credits; they cannot spend the owner’s Groq/Fish credentials. Groq is bounded to 6 steps, 16 executed tools, 2,048 output tokens, no automatic retry, and a 45-second turn timeout. Native chat uses DeepSpace AI credits billed to the signed-in caller. The default model is the catalog's GPT Luna when available. Keys are supplied through the encrypted app secrets store and never included in source or client bundles. In Settings, save your actual timezone before relative-date reminders. Unspecified reminder times prompt clarification.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ With `LLM_MODE=groq`, the app owner’s conversations and compaction use Groq wi
 
 All `.env.example` values are intentionally blank. Never commit `.env`, `.dev.vars`, or keys. DeepSpace generates local runtime configuration; app credentials belong in its encrypted Secrets store. Do not hand-edit `.dev.vars`.
 
-Optional owner-only server voice uses `GROQ_API_KEY` for Whisper transcription, and `VOICE_API_KEY` plus `VOICE_ID` for Fish Audio speech. Set rotated credentials through DeepSpace's Secrets UI/store and redeploy. `VOICE_ID` is the Fish voice reference identifier, not an API key. The UI requests Fish Audio on Listen when configured for the current account; it shows an audio player. Provider failure offers an explicit device-voice fallback. Fish Audio HTTP 402 means API funding is required at https://fish.audio/app/developers, separate from subscription credits. No optional voice key is required for the shipped app.
+Optional owner-only server voice uses `GROQ_API_KEY` for Whisper transcription, and `VOICE_API_KEY` plus `VOICE_ID` for Fish Audio speech. Set rotated credentials through DeepSpace's Secrets UI/store and redeploy. `VOICE_ID` is the Fish voice reference identifier, not an API key. Listen uses the browser/device speech service by default and does not request Fish Audio. The uploaded greeting has a separate audio player. The owner-only Fish endpoint remains optional for API clients. Fish Audio HTTP 402 means API funding is required at https://fish.audio/app/developers, separate from subscription credits. No optional voice key is required for the shipped app.
 
 ## Interface/API
 
@@ -89,3 +89,45 @@ The assistant dashboard preserves the complete desktop HUD on iPhone, including
 all side panels. The initial overview fits the complete dashboard on screen.
 Tap **Zoom dashboard**, then swipe horizontally to reach its controls;
 Safari pinch zoom remains enabled. Other application pages remain responsive.
+
+### Location, Apple Home, Apple Music and live information
+
+Open **Apps / Connections** to configure services. GPS is requested only after
+**Use my iPhone location**; save explicitly. Coordinates are private to the user
+and sent to Open-Meteo for weather requests. Clear saved location removes its
+stored name and coordinates. A location lookup in chat can send those details
+to the selected LLM, so use a general area when precise coordinates are unnecessary.
+
+Apple Home is not a web API. In iPhone Shortcuts, create **Control My Home**
+actions for your TV, lights, plugs or fans and register the exact On/Off shortcut
+names in **Smart home**. If a TV cannot change power through Apple Home, use its
+manufacturer's supported Shortcut actions. Tapping On/Off opens the corresponding
+`shortcuts://run-shortcut?name=...` URL. The iPhone controls authorization and
+execution; JARVIS does not claim success or read device status. Removing a
+connection clears its registered names. Locks and alarm controls are unsupported.
+
+For **Apple Music**, make Play Music and optionally Pause Music shortcuts and
+register their names. This uses the iPhone's Apple Music subscription and app;
+it does not grant JARVIS direct library access. No Apple credentials are collected.
+
+Listen uses device speech by default and makes no Fish API request. The uploaded
+startup greeting remains available separately. Device speech may use the browser
+or OS speech service; it is not a guarantee of offline synthesis.
+
+**Live information** offers Open-Meteo weather, BBC RSS headlines and live
+Wikipedia searches with source links/timestamps. It is not a general web search.
+Provider errors produce unavailable status, never invented data. Public Open-Meteo
+access is for noncommercial use; commercial deployment requires its paid API plan.
+New tools: `get_weather`, `get_news`, `search_online_information`, `get_location`,
+`list_smart_devices`, `prepare_device_control`. Device control remains pending a
+user tap. **Security** reports authenticated session, HTTPS and server reachability;
+it does not monitor security devices. Games and Internet navigation were removed.
+
+Connection routes (all require authentication and membership):
+
+- `POST /api/jarvis/connections/location`: `{ label, latitude, longitude, enabled: 1 }`
+- `POST /api/jarvis/connections/devices`: `{ name, kind, onShortcut, offShortcut, enabled: 1 }`
+- `POST /api/jarvis/connections/disable`: `{ collection, recordId }`
+- `GET /api/jarvis/connections/weather`
+- `GET /api/jarvis/connections/news`
+- `GET /api/jarvis/connections/search?q=...`

@@ -22,10 +22,9 @@ export default function SettingsPage() {
       <h2>Voice on iPhone</h2>
       <p className="muted leading-7">
         Tap the microphone in a conversation to dictate. Review the transcript,
-        then send. Tap Listen beneath a reply to request your configured Fish
-        Audio voice. If Fish Audio needs credits, you can explicitly choose the
-        iPhone voice fallback. If Safari dictation is unavailable, use your
-        keyboard’s microphone.
+        then send. Tap Listen beneath a reply to use your device’s built-in
+        voice. No Fish Audio credits are used. If Safari dictation is
+        unavailable, use your keyboard’s microphone.
       </p>
       <h2>Keep JARVIS close</h2>
       <p className="muted leading-7">
@@ -34,19 +33,23 @@ export default function SettingsPage() {
         listening is not enabled.
       </p>
       <h2>Connected services</h2>
+      <a className="connection-action" href="/connections">
+        Manage connections
+      </a>
       <p className="muted leading-7">
         Your account uses Groq when configured; other accounts use their own
         DeepSpace AI credits. Credentials stay encrypted on the server. Fish
-        Audio API credits are separate from subscription credits. Weather,
-        email, calendar, music, maps, and smart-home services are not connected
-        yet. JARVIS will tell you when a request needs one.
+        Audio API credits are separate from subscription credits. Live weather,
+        news, and Wikipedia lookups are available. Add your location, Apple Home
+        controls and Apple Music shortcuts in Connections. Email and calendar
+        are not connected.
       </p>
       <h2>Privacy</h2>
       <p className="muted leading-7">
         Conversations are sent to your selected AI provider to generate replies.
-        Device dictation may use your phone’s speech service. Requests for your
-        configured voice send the reply text to Fish Audio. Personal memories
-        are added only when you ask. Manage and delete your data in My space.
+        Device dictation may use your phone’s speech service. Device speech uses
+        your browser or iPhone speech service. Personal memories are added only
+        when you ask. Manage and delete your data in My space.
       </p>
     </div>
   );

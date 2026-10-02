@@ -52,7 +52,6 @@ export function JarvisChat({ userId }: { userId: string }) {
   } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
-  const [deviceFallback, setDeviceFallback] = useState<string | null>(null);
   const playback = useRef<HTMLAudioElement | null>(null);
   const speech = useRef<Recognition | null>(null);
   useEffect(() => {
@@ -96,40 +95,11 @@ export function JarvisChat({ userId }: { userId: string }) {
     utterance.rate = 1;
     window.speechSynthesis.speak(utterance);
   }
-  async function speak(text: string) {
-    window.speechSynthesis?.cancel();
+  function speak(text: string) {
     playback.current?.pause();
     setVoiceError("");
-    setDeviceFallback(null);
     setAudioUrl(null);
-    if (!capabilities?.fishVoice) {
-      deviceSpeak(text);
-      return;
-    }
-    setSpeaking(true);
-    try {
-      const response = await authenticatedFetch("/api/jarvis/voice/speak", {
-        text: text.slice(0, 4000),
-      });
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        setVoiceError(
-          error.error === "speech_credits_required"
-            ? "Fish Audio needs API credits before it can generate speech."
-            : error.error === "speech_access_denied"
-              ? "Fish Audio denied access. Check your voice account and key."
-              : "The voice service is unavailable. Please try again.",
-        );
-        setDeviceFallback(text);
-        return;
-      }
-      setAudioUrl(URL.createObjectURL(await response.blob()));
-    } catch {
-      setVoiceError("Could not reach the voice service. Please try again.");
-      setDeviceFallback(text);
-    } finally {
-      setSpeaking(false);
-    }
+    deviceSpeak(text);
   }
   const bottom = useRef<HTMLDivElement>(null);
   const where = useMemo(
@@ -235,6 +205,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     <JarvisHud
       listening={listening}
       busy={isLoading}
+      onVoice={dictate}
       provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
       showChat={showChat}
       onHome={() => setShowChat(false)}
@@ -401,7 +372,11 @@ export function JarvisChat({ userId }: { userId: string }) {
             </div>
           </div>
           {capabilities?.fishVoice && (
-            <button className="read-aloud" disabled={speaking} onClick={playGreeting}>
+            <button
+              className="read-aloud"
+              disabled={speaking}
+              onClick={playGreeting}
+            >
               <Volume2 size={16} /> Start JARVIS / play greeting
             </button>
           )}
@@ -415,15 +390,7 @@ export function JarvisChat({ userId }: { userId: string }) {
               aria-label="JARVIS audio playback"
             />
           )}
-          {deviceFallback && (
-            <button
-              className="read-aloud"
-              onClick={() => deviceSpeak(deviceFallback)}
-            >
-              <Volume2 size={15} />
-              Use iPhone / device voice
-            </button>
-          )}
+
           <p className="composer-footnote">
             {listening
               ? "Listening once. Your transcript appears here before you send."

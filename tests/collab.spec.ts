@@ -174,8 +174,10 @@ test('holographic dashboard shows honest connection states and working navigatio
  const [a]=await users(1);await a.page.setViewportSize({width:1440,height:1000});await a.page.goto('/home')
  await expect(a.page.locator('.hud-brand h1')).toHaveText('JARVIS')
  await expect(a.page.locator('.hud-reactor')).toBeVisible()
- await expect(a.page.locator('.hud-weather')).toContainText('Provider not connected')
- await expect(a.page.getByRole('button',{name:'SMART HOME',exact:true})).toBeDisabled()
+ await expect(a.page.locator('.hud-weather')).toContainText('Tap for live weather')
+ await expect(a.page.getByRole('link',{name:'SMART HOME',exact:true})).toHaveAttribute('href','/connections?tab=home')
+ await expect(a.page.getByText('GAMES',{exact:true})).toHaveCount(0)
+ await expect(a.page.getByText('INTERNET',{exact:true})).toHaveCount(0)
  await expect(a.page.locator('.location-panel')).toContainText('Location access is not enabled')
  await a.page.screenshot({path:'test-results/jarvis-desktop.png',fullPage:true})
  await a.page.getByRole('button',{name:'CHAT',exact:true}).click()
@@ -248,3 +250,20 @@ test('preferences persist and action quota returns 429',async({users})=>{
  const statuses=await a.page.evaluate(async()=>{const path='/src/jarvis/client.ts';const module=await import(path);const statuses:number[]=[];for(let i=0;i<35;i++){const r=await module.authenticatedFetch('/api/jarvis/memories',{});statuses.push(r.status);if(r.status===429)break}return statuses})
  expect(statuses).toContain(429)
 })
+
+test('location and shortcut connections persist privately and reject cross-user edits',async({users})=>{
+ const [a,b]=await users(2);await a.page.goto('/connections?tab=location');await b.page.goto('/connections?tab=location');
+ const label=`Private place ${Date.now()}`;
+ await a.page.getByRole('textbox',{name:'Place name'}).fill(label);await a.page.getByRole('spinbutton',{name:'Latitude'}).fill('40.7');await a.page.getByRole('spinbutton',{name:'Longitude'}).fill('-74');await a.page.getByRole('button',{name:'Save location',exact:true}).click();await expect(a.page.getByRole('status')).toContainText('Saved.');await a.page.reload();await expect(a.page.getByRole('textbox',{name:'Place name'})).toHaveValue(label);await expect(b.page.getByRole('textbox',{name:'Place name'})).not.toHaveValue(label);
+ await a.page.goto('/connections?tab=home');const device=`Bedroom TV ${Date.now()}`;await a.page.getByRole('textbox',{name:'Device display name'}).fill(device);await a.page.getByRole('textbox',{name:'On shortcut name'}).fill('TV On & verify');await a.page.getByRole('textbox',{name:'Off shortcut name'}).fill('TV Off');const savedDeviceResponse=a.page.waitForResponse(r=>r.url().endsWith('/api/jarvis/connections/devices')&&r.request().method()==='POST');await a.page.getByRole('button',{name:'Add connection',exact:true}).click();const savedDevice=await (await savedDeviceResponse).json();const recordId=savedDevice.data.record.recordId;await expect(a.page.getByRole('heading',{name:device,exact:true})).toBeVisible();await expect(a.page.locator('.personal-card').filter({hasText:device}).getByRole('link',{name:'Turn on',exact:true})).toHaveAttribute('href','shortcuts://run-shortcut?name=TV%20On%20%26%20verify');await b.page.goto('/connections?tab=home');await expect(b.page.getByText(device,{exact:true})).toHaveCount(0);const refused=await b.page.evaluate(async(recordId)=>{const module=await import('/src/jarvis/client.ts');const result=await module.authenticatedFetch('/api/jarvis/connections/disable',{collection:'device-shortcuts',recordId});return result.status},recordId);expect(refused).toBe(404);
+ const id=await a.page.evaluate(async()=>{const module=await import('/src/jarvis/client.ts');const response=await module.authenticatedFetch('/api/jarvis/connections/location',{label:'Private edited location',latitude:40,longitude:-74,enabled:1});return response.status});expect(id).toBe(200);
+ await a.page.goto('/connections?tab=location');await a.page.getByRole('button',{name:'Clear saved location',exact:true}).click();await expect(a.page.getByRole('button',{name:'Clear saved location',exact:true})).toHaveCount(0);await a.page.goto('/connections?tab=home');await a.page.locator('.personal-card').filter({hasText:device}).getByRole('button',{name:'Remove connection',exact:true}).click();await expect(a.page.getByText(device,{exact:true})).toHaveCount(0);
+});
+
+test('security and live panels work and missing location is explained',async({users})=>{
+ const [a]=await users(1);await a.page.goto('/connections?tab=security');await expect(a.page.getByText('Session: signed in',{exact:true})).toBeVisible();await a.page.getByRole('button',{name:'Check server connection',exact:true}).click();await expect(a.page.getByRole('status')).toContainText('server reachable');await a.page.goto('/connections?tab=location');if(await a.page.getByRole('button',{name:'Clear saved location',exact:true}).count()){await a.page.getByRole('button',{name:'Clear saved location',exact:true}).click();await expect(a.page.getByRole('button',{name:'Clear saved location',exact:true})).toHaveCount(0);}await a.page.goto('/connections?tab=live');await a.page.getByRole('button',{name:'Check live weather',exact:true}).click();await expect(a.page.getByRole('status')).toContainText('Add your location first');
+});
+
+test('Listen uses device speech and never requests Fish audio',async({users})=>{
+ const [a]=await users(1);await a.page.addInitScript(()=>{window.speechSynthesis.speak=(utterance)=>{(window as unknown as {__spoken:string}).__spoken=utterance.text}});let fishRequests=0;a.page.on('request',r=>{if(r.url().includes('/voice/speak'))fishRequests++});await a.page.goto('/home');await a.page.getByRole('textbox',{name:'Message JARVIS'}).fill('Please get the current UTC time.');await a.page.getByRole('button',{name:'Send message'}).click();await expect(a.page.getByText('The current time was retrieved successfully.',{exact:true})).toBeVisible();await a.page.getByRole('button',{name:'Read response aloud',exact:true}).last().click();expect(await a.page.evaluate(()=>(window as unknown as {__spoken:string}).__spoken)).toContain('current time');expect(fishRequests).toBe(0);
+});

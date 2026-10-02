@@ -28,6 +28,50 @@ const userColumn = {
 };
 export const personalSchemas: CollectionSchema[] = [
   {
+    name: "locations",
+    ownerField: "userId",
+    uniqueOn: ["userId"],
+    columns: [
+      userColumn,
+      ...["label"].map((name) => ({
+        name,
+        storage: "text" as const,
+        interpretation: "plain",
+      })),
+      ...["latitude", "longitude", "enabled"].map((name) => ({
+        name,
+        storage: "number" as const,
+        interpretation: "plain",
+      })),
+    ],
+    permissions: own(true, ["label", "latitude", "longitude", "enabled"]),
+  },
+  {
+    name: "device-shortcuts",
+    ownerField: "userId",
+    columns: [
+      userColumn,
+      ...["name", "kind", "onShortcut", "offShortcut"].map((name) => ({
+        name,
+        storage: "text" as const,
+        interpretation: "plain",
+      })),
+      {
+        name: "enabled",
+        storage: "number",
+        interpretation: "plain",
+        default: 1,
+      },
+    ],
+    permissions: own(true, [
+      "name",
+      "kind",
+      "onShortcut",
+      "offShortcut",
+      "enabled",
+    ]),
+  },
+  {
     name: "memories",
     ownerField: "userId",
     columns: [

@@ -1355,3 +1355,13 @@ a:focus-visible {
 @media (max-width: 700px) {
   .hud-pan-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 }
+.connection-tabs,.connection-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+.connection-tabs button,.connection-action{border:1px solid #18506a;border-radius:6px;padding:9px 14px;background:#061524;color:#a9dff5;font-size:13px;display:inline-flex;align-items:center;gap:8px}
+.connection-tabs button.active{border-color:#54c9ee;box-shadow:0 0 12px #198dc733}
+.connection-page form{display:grid;gap:15px;margin:25px 0;max-width:560px}
+.connection-page label{display:grid;gap:8px;font-size:14px}
+.connection-page select{background:#071527;border:1px solid #28516c;padding:10px;border-radius:6px;color:#d7eeff}
+.live-result{border:1px solid #18506a;padding:20px;margin-top:20px;max-width:100%;overflow:auto;font-size:12px}
+.live-result pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.holo-modules button,.holo-modules a{text-align:center;color:inherit}
+.hud-panel-action{display:inline-block;color:#79d9fa;font-size:10px;margin-top:8px;text-decoration:underline}
