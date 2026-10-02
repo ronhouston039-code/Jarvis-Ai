@@ -52,6 +52,12 @@ export function JarvisChat({ userId }: { userId: string }) {
   } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const pendingSpeech = useRef<{
+    previousIds: Set<string>;
+    started: boolean;
+  } | null>(null);
   const playback = useRef<HTMLAudioElement | null>(null);
   const speech = useRef<Recognition | null>(null);
   useEffect(() => {
@@ -93,6 +99,26 @@ export function JarvisChat({ userId }: { userId: string }) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1;
+    utterance.volume = 1;
+    utterance.lang = navigator.language || "en-US";
+    utterance.onstart = () => {
+      if (utteranceRef.current === utterance) setSpeaking(true);
+    };
+    utterance.onend = () => {
+      if (utteranceRef.current !== utterance) return;
+      setSpeaking(false);
+      utteranceRef.current = null;
+    };
+    utterance.onerror = (event) => {
+      if (utteranceRef.current !== utterance) return;
+      setSpeaking(false);
+      utteranceRef.current = null;
+      if (event.error !== "interrupted" && event.error !== "canceled")
+        setVoiceError(
+          "Your device could not play speech. Tap Listen again and check your media volume.",
+        );
+    };
+    utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   }
   function speak(text: string) {
@@ -141,6 +167,48 @@ export function JarvisChat({ userId }: { userId: string }) {
     ),
   ];
   useEffect(() => {
+    const pending = pendingSpeech.current;
+    if (!pending || !voiceEnabled) return;
+    if (isLoading) {
+      pending.started = true;
+      return;
+    }
+    if (!pending.started) return;
+    if (error) {
+      pendingSpeech.current = null;
+      return;
+    }
+    const reply = [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === "assistant" &&
+          message.content &&
+          !pending.previousIds.has(message.id),
+      );
+    if (reply) {
+      pendingSpeech.current = null;
+      speak(reply.content);
+    }
+  }, [isLoading, error, records, inFlight, voiceEnabled]);
+  function toggleVoice() {
+    if (voiceEnabled) {
+      pendingSpeech.current = null;
+      window.speechSynthesis?.cancel();
+      setSpeaking(false);
+      setVoiceEnabled(false);
+    } else {
+      setVoiceEnabled(true);
+      speak("Voice enabled. I’m ready.");
+    }
+  }
+  function stopResponse() {
+    pendingSpeech.current = null;
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+    stop();
+  }
+  useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [records, inFlight]);
   useEffect(() => {
@@ -157,6 +225,9 @@ export function JarvisChat({ userId }: { userId: string }) {
       speech.current?.stop();
       return;
     }
+    window.speechSynthesis?.cancel();
+    playback.current?.pause();
+    setSpeaking(false);
     const Constructor =
       (window as SpeechWindow).SpeechRecognition ??
       (window as SpeechWindow).webkitSpeechRecognition;
@@ -198,6 +269,12 @@ export function JarvisChat({ userId }: { userId: string }) {
     if (!draft.trim() || isLoading) return;
     speech.current?.stop();
     setShowChat(true);
+    pendingSpeech.current = voiceEnabled
+      ? {
+          previousIds: new Set(messages.map((message) => message.id)),
+          started: false,
+        }
+      : null;
     void send(draft.trim());
     setDraft("");
   }
@@ -219,7 +296,7 @@ export function JarvisChat({ userId }: { userId: string }) {
           <Button
             variant="outline"
             onClick={() => {
-              stop();
+              stopResponse();
               setChatId(null);
               setShowChat(false);
             }}
@@ -231,7 +308,7 @@ export function JarvisChat({ userId }: { userId: string }) {
             <button
               key={c.recordId}
               onClick={() => {
-                stop();
+                stopResponse();
                 setChatId(c.recordId);
                 setShowChat(true);
               }}
@@ -355,7 +432,7 @@ export function JarvisChat({ userId }: { userId: string }) {
                 <button
                   className="send-button"
                   aria-label="Stop response"
-                  onClick={stop}
+                  onClick={stopResponse}
                 >
                   <Square size={17} />
                 </button>
@@ -371,6 +448,32 @@ export function JarvisChat({ userId }: { userId: string }) {
               )}
             </div>
           </div>
+          <div className="connection-actions">
+            <button
+              className="read-aloud"
+              aria-pressed={voiceEnabled}
+              onClick={toggleVoice}
+            >
+              <Volume2 size={16} />{" "}
+              {voiceEnabled ? "Voice on · turn off" : "Voice off · turn on"}
+            </button>
+            {speaking && (
+              <button
+                className="read-aloud"
+                onClick={() => {
+                  window.speechSynthesis?.cancel();
+                  setSpeaking(false);
+                }}
+              >
+                Stop speaking
+              </button>
+            )}
+          </div>
+          <p className="muted text-sm">
+            {voiceEnabled
+              ? "New replies will be spoken. Keep JARVIS open and your media volume up."
+              : "Turn voice on to hear replies automatically, or tap Listen beneath a reply."}
+          </p>
           {capabilities?.fishVoice && (
             <button
               className="read-aloud"

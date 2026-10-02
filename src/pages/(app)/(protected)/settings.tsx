@@ -23,8 +23,10 @@ export default function SettingsPage() {
       <p className="muted leading-7">
         Tap the microphone in a conversation to dictate. Review the transcript,
         then send. Tap Listen beneath a reply to use your device’s built-in
-        voice. No Fish Audio credits are used. If Safari dictation is
-        unavailable, use your keyboard’s microphone.
+        voice. No Fish Audio credits are used. Turn voice on at the bottom of
+        the dashboard to automatically hear new replies. Tap once each time you
+        open the app to activate device playback, and keep media volume up. If
+        Safari dictation is unavailable, use your keyboard’s microphone.
       </p>
       <h2>Keep JARVIS close</h2>
       <p className="muted leading-7">

@@ -131,3 +131,12 @@ Connection routes (all require authentication and membership):
 - `GET /api/jarvis/connections/weather`
 - `GET /api/jarvis/connections/news`
 - `GET /api/jarvis/connections/search?q=...`
+
+### Automatic device replies
+
+Tap **Voice off · turn on** in the dashboard to activate speech with an audible
+acknowledgement (a user gesture is required on iPhone). New completed replies are
+spoken once. Loading old history or navigating Home/Chat does not replay replies.
+Turn voice off or use Stop speaking to cancel. Voice activation is per mounted
+session; no background speech or microphone capture is enabled. Speech errors
+show a safe message; check media volume and retry Listen if Safari blocks playback.
