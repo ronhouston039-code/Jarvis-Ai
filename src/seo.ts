@@ -25,7 +25,7 @@ declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined
 
 export const seo = {
   title: APP_NAME,
-  description: `${APP_NAME} is a real-time collaborative app.`,
+  description: 'JARVIS is your personal AI assistant for voice conversations, planning, reminders, and thoughtful memory.',
   /** Public origin for canonical URLs, og:url, and the sitemap — no trailing
    *  slash. Replace with the custom domain once one is attached, e.g.
    *  'https://www.example.com'. */

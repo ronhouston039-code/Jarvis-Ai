@@ -16,3 +16,10 @@ test.describe('API tests', () => {
     // If the app loaded and connected, the WS endpoint works
   })
 })
+
+test('JARVIS refuses unauthenticated writes and voice',async({request})=>{
+ for(const path of ['reminders','memories','confirmations/request','confirmations/approve','voice/speak','voice/transcribe']){
+ const result=await request.post(`/api/jarvis/${path}`,{data:{}});expect(result.status()).toBe(401)
+ }
+ expect((await request.get('/api/jarvis/capabilities')).status()).toBe(401)
+})

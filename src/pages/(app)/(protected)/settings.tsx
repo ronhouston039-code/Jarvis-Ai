@@ -1,41 +1,48 @@
-/**
- * Example gated page. Reached at /settings — no auth logic lives here
- * because (protected)/_layout.tsx already wraps the subtree in <AuthGate>.
- */
-
-import { signOut, useUser } from 'deepspace'
-import { Button } from '@/components/ui'
-
+import { signOut, useUser } from "deepspace";
+import { JarvisPreferences } from "../../../components/JarvisPreferences";
+import { Button } from "../../../components/ui";
 export default function SettingsPage() {
-  const { user } = useUser()
-
+  const { user } = useUser();
   return (
-    // No background on page wrappers — pages render into whatever the app's
-    // (app)/_layout provides (a plain background, or a raised panel), so they
-    // stay transparent and inherit it.
-    <div className="min-h-full text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-20">
-        <h1 className="mb-12 text-4xl font-bold tracking-tight">Settings</h1>
-
-        <section className="rounded-lg border border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-semibold">Your account</h2>
-
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Name</dt>
-              <dd className="text-foreground">{user?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Email</dt>
-              <dd className="text-foreground">{user?.email ?? '—'}</dd>
-            </div>
-          </dl>
-
-          <Button variant="secondary" className="mt-6" onClick={() => signOut()}>
-            Sign out
-          </Button>
-        </section>
-      </div>
+    <div className="personal-page">
+      <p className="eyebrow">YOUR ASSISTANT, YOUR WAY</p>
+      <h1>Settings</h1>
+      <section className="personal-card">
+        <div>
+          <h2 className="!mt-0">Your account</h2>
+          <p>{user?.name}</p>
+          <p className="muted text-sm">{user?.email}</p>
+        </div>
+        <Button variant="outline" onClick={() => signOut()}>
+          Sign out
+        </Button>
+      </section>
+      <h2>Personal preferences</h2>
+      <JarvisPreferences />
+      <h2>Voice on iPhone</h2>
+      <p className="muted leading-7">
+        Tap the microphone in a conversation to dictate. Review the transcript,
+        then send. Tap Listen beneath a reply to hear it in your device’s voice.
+        If Safari dictation is unavailable, use your keyboard’s microphone.
+      </p>
+      <h2>Keep JARVIS close</h2>
+      <p className="muted leading-7">
+        Open this app in Safari. Tap Share, then Add to Home Screen. JARVIS
+        listens only when you activate voice input; background wake-word
+        listening is not enabled.
+      </p>
+      <h2>Connected services</h2>
+      <p className="muted leading-7">
+        AI conversations use DeepSpace’s model connection and your account
+        credits. Weather, email, calendar, music, maps, and smart-home services
+        are not connected yet. JARVIS will tell you when a request needs one.
+      </p>
+      <h2>Privacy</h2>
+      <p className="muted leading-7">
+        Conversations are sent to your selected AI provider to generate replies.
+        Device dictation may use your phone’s speech service. Personal memories
+        are added only when you ask. Manage and delete your data in My space.
+      </p>
     </div>
-  )
+  );
 }

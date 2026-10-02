@@ -1,35 +1,67 @@
-/**
- * Cron task definitions — registered into the AppCronRoom DO at construction
- * time (worker.ts). The DO alarm fires `runTask(name, env)` on the schedule
- * declared here; the DO itself records executions, tracks history, and
- * pushes status to admin clients via the `/ws/cron/:roomId` WebSocket.
- *
- * Each task declares EITHER `intervalMinutes` (run every N minutes) OR
- * `schedule` + `timezone` (5-field cron expression). CronRoom validates
- * the config at construction time and throws on ambiguous declarations.
- *
- * Example:
- *
- *   import type { CronTask } from 'deepspace/worker'
- *   import { buildCronContext } from 'deepspace/worker'
- *
- *   export const tasks: CronTask[] = [
- *     { name: 'heartbeat', intervalMinutes: 1 },
- *     { name: 'daily-report', schedule: '0 9 * * *', timezone: 'America/New_York' },
- *   ]
- *
- *   export async function runTask(name: string, env: Env): Promise<void> {
- *     const ctx = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
- *     if (name === 'heartbeat') {
- *       // …
- *     }
- *   }
- */
+import { buildCronContext, type CronTask } from "deepspace/worker";
+import type { Env } from "../worker";
+import type { Reminder, Stored } from "./jarvis/contracts";
 
-import type { CronTask } from 'deepspace/worker'
-
-export const tasks: CronTask[] = []
-
-export async function runTask(_name: string, _env: unknown): Promise<void> {
-  // No-op — implement your cron tasks here. Dispatch on `_name`.
+export const tasks: CronTask[] = [
+  { name: "deliver-reminders", intervalMinutes: 1 },
+];
+export async function runTask(name: string, env: Env): Promise<void> {
+  if (name !== "deliver-reminders") return;
+  const room = env.RECORD_ROOMS.get(
+    env.RECORD_ROOMS.idFromName(`app:${env.DEEPSPACE_APP_ID}`),
+  );
+  const response = await room.fetch(
+    new Request("https://internal/api/tools/execute", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": env.OWNER_USER_ID,
+        "X-App-Action": "true",
+      },
+      body: JSON.stringify({
+        tool: "records.query",
+        params: {
+          collection: "reminders",
+          where: { status: "scheduled" },
+          orderBy: "dueAt",
+          orderDir: "asc",
+          limit: 500,
+        },
+      }),
+    }),
+  );
+  const result = (await response.json()) as {
+    success: boolean;
+    data?: { records: Stored<Reminder>[] };
+  };
+  if (!response.ok || !result.success) throw new Error("Reminder query failed");
+  const due = result.data?.records ?? [];
+  for (const reminder of due) {
+    if (
+      !reminder.data.userId ||
+      !Number.isFinite(Date.parse(reminder.data.dueAt)) ||
+      Date.parse(reminder.data.dueAt) > Date.now()
+    )
+      continue;
+    const user = buildCronContext(
+      env,
+      reminder.data.userId,
+      `app:${env.DEEPSPACE_APP_ID}`,
+    );
+    const exists = await user.records.query("notifications", {
+      where: { reminderId: reminder.recordId },
+      limit: 1,
+    });
+    if (!exists.length)
+      await user.records.create("notifications", {
+        userId: reminder.data.userId,
+        reminderId: reminder.recordId,
+        title: "Reminder",
+        message: reminder.data.title,
+        read: 0,
+      });
+    await user.records.update("reminders", reminder.recordId, {
+      status: "delivered",
+    });
+  }
 }

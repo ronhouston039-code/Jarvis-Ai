@@ -4,7 +4,7 @@
   To switch themes, change `data-theme` to any id defined in src/themes.ts.
   Color values per theme live in src/themes.css.
 -->
-<html lang="en" data-theme="slate">
+<html lang="en" data-theme="jarvis">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,7 +22,7 @@
       html[data-theme="paper"] { background-color: #ffffff; color-scheme: light; }
       /* Add one line per theme you create, mirroring its --color-background. */
     </style>
-  </head>
+  <meta name="apple-mobile-web-app-capable" content="yes"/><meta name="theme-color" content="#0d1417"/><link rel="manifest" href="/manifest.webmanifest"/></head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
