@@ -1331,214 +1331,6 @@ a:focus-visible {
     margin-top: 500px;
   }
 }
-@media (max-width: 1100px) {
-  .hud-top {
-    grid-template-columns: 135px 1fr 160px;
-  }
-  .hud-weather,
-  .hud-connection {
-    display: none;
-  }
-  .hud-body {
-    grid-template-columns: 130px minmax(300px, 1fr) 190px;
-  }
-  .hud-support {
-    display: none;
-  }
-  .hud-brand h1 {
-    font-size: 34px;
-  }
-  .hud-menu button,
-  .hud-menu > a {
-    padding: 10px;
-    font-size: 9px;
-    gap: 9px;
-  }
-}
-@media (max-width: 700px) {
-  .hud-dashboard {
-    padding: 10px 13px 14px;
-    min-height: calc(100dvh - 49px);
-  }
-  .hud-top {
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .hud-clock {
-    display: none;
-  }
-  .hud-brand {
-    text-align: left;
-    padding: 4px 4px;
-  }
-  .hud-brand h1 {
-    font-size: 28px;
-    letter-spacing: 7px;
-  }
-  .hud-brand p {
-    font-size: 7px;
-    letter-spacing: 1.1px;
-  }
-  .hud-voice {
-    padding: 6px 9px;
-    gap: 6px;
-    width: 128px;
-  }
-  .hud-voice > svg {
-    width: 32px;
-    height: 32px;
-    padding: 6px;
-  }
-  .voice-wave {
-    gap: 2px;
-    overflow: hidden;
-  }
-  .voice-wave i {
-    width: 1px;
-  }
-  .voice-wave span {
-    font-size: 8px;
-  }
-  .hud-body {
-    display: flex;
-    flex-direction: column;
-    gap: 13px;
-    min-height: 0;
-  }
-  .hud-menu {
-    flex-direction: row;
-    gap: 7px;
-    overflow-x: auto;
-    padding: 2px 1px 7px;
-    scrollbar-width: none;
-  }
-  .hud-menu button,
-  .hud-menu > a {
-    padding: 9px 12px;
-    min-height: 36px;
-    gap: 7px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    font-size: 9px;
-  }
-  .hud-menu button:disabled {
-    display: none;
-  }
-  .hud-menu svg {
-    width: 15px;
-    height: 15px;
-  }
-  .hud-support {
-    display: none;
-  }
-  .hud-main {
-    min-height: 350px;
-  }
-  .hud-stage-label {
-    font-size: 7px;
-    letter-spacing: 1.4px;
-    margin: 3px 0 5px;
-  }
-  .hud-hologram {
-    min-height: 350px;
-  }
-  .hud-hologram .jarvis-orb {
-    width: 300px;
-    height: 320px;
-    top: 0;
-  }
-  .hologram-platform {
-    height: 55px;
-    bottom: -6%;
-  }
-  .hologram-caption {
-    margin-top: 315px;
-  }
-  .hologram-caption > span {
-    font-size: 8px;
-    letter-spacing: 3px;
-  }
-  .hologram-caption p {
-    font-size: 12px;
-  }
-  .holo-modules {
-    display: none;
-  }
-  .hud-right {
-    display: block;
-  }
-  .hud-right > section {
-    display: none;
-  }
-  .hud-right .upcoming-panel {
-    display: block;
-    padding: 12px 14px;
-  }
-  .upcoming-panel h2 {
-    margin-bottom: 8px;
-    font-size: 10px;
-  }
-  .hud-empty {
-    font-size: 10px;
-  }
-  .hud-empty br {
-    display: none;
-  }
-  .hud-empty a {
-    margin-left: 8px;
-  }
-  .hud-reminder {
-    padding: 6px 0;
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-    align-items: center;
-  }
-  .hud-reminder small {
-    margin: 0;
-    flex-shrink: 0;
-  }
-  .hud-reminder span {
-    font-size: 10px;
-  }
-  .hud-bottom {
-    margin-top: 15px;
-    position: sticky;
-    bottom: 0;
-    background: #020b15e8;
-    padding: 6px 0 8px;
-  }
-  .hud-bottom .composer {
-    padding: 8px 10px;
-    gap: 7px;
-    border-radius: 20px 5px 20px 5px;
-  }
-  .hud-bottom textarea {
-    font-size: 16px;
-    min-height: 44px;
-    padding: 9px 3px;
-  }
-  .hud-bottom .composer-footnote {
-    font-size: 8px;
-    margin-top: 9px;
-    margin-bottom: 0;
-  }
-  .hud-conversation {
-    min-height: 340px;
-    max-height: 55dvh;
-  }
-  .hud-conversation .message-list {
-    padding: 8px 12px;
-  }
-  .hud-main.chat-open {
-    min-height: 360px;
-    padding-bottom: 0;
-  }
-  .hud-conversation .message-content {
-    font-size: 14px;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .reactor-outer,
   .reactor-inner,
@@ -1549,15 +1341,17 @@ a:focus-visible {
 .hud-main .hologram-caption {
   margin-top: 485px;
 }
-@media (max-width: 700px) {
-  .hud-hologram .jarvis-orb {
-    height: 300px;
-  }
-  .hud-hologram .hologram-platform {
-    bottom: 0;
-  }
-  .hud-main .hologram-caption {
-    margin-top: 315px;
-  }
-}
 .hud-audio{width:100%;height:36px;margin-top:12px;color-scheme:dark}
+
+/* Keep the complete reference layout on phones; pan inside the dashboard. */
+.hud-viewport { width: 100%; max-width: 100%; overflow-x: auto; }
+.hud-dashboard { min-width: 1280px; transform-origin: top left; }
+.hud-pan-hint { display: none; }
+@media (max-width: 700px) {
+  .hud-pan-hint { display: block; margin: 0; padding: 8px 14px; color: #81bfd9; background: #020711; font-size: 11px; }
+}
+
+.hud-pan-hint button { border: 1px solid #1c6484; border-radius: 5px; padding: 5px 8px; color: #a2e4ff; background: #061727; }
+@media (max-width: 700px) {
+  .hud-pan-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+}

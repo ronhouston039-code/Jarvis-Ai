@@ -151,11 +151,22 @@ test('private memory isolates users and deletion requires an action-bound confir
  await expect(a.page.getByText(content,{exact:true})).toHaveCount(0)
 })
 
-test('iPhone-sized chat fits screen and microphone control is present',async({users})=>{
+test('iPhone keeps the full desktop dashboard with horizontal panning',async({users})=>{
  const [a]=await users(1);await a.page.setViewportSize({width:390,height:844});await a.page.goto('/home')
  await expect(a.page.getByRole('textbox',{name:'Message JARVIS'})).toBeVisible()
  await expect(a.page.getByRole('button',{name:'Start voice input'})).toBeVisible()
  expect(await a.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true)
+ await expect(a.page.getByRole('button',{name:'Zoom dashboard',exact:true})).toBeVisible()
+ await a.page.screenshot({path:'test-results/jarvis-mobile-overview.png',fullPage:true})
+ await a.page.getByRole('button',{name:'Zoom dashboard',exact:true}).click()
+ const layout=await a.page.evaluate(()=>{const viewport=document.querySelector('.hud-viewport');const dashboard=document.querySelector('.hud-dashboard');const support=document.querySelector('.hud-support');return {width:dashboard.getBoundingClientRect().width,scrollable:viewport.scrollWidth>viewport.clientWidth,supportVisible:getComputedStyle(support).display!=='none'}})
+ expect(layout.width).toBeGreaterThanOrEqual(1280)
+ expect(layout.scrollable).toBe(true)
+ expect(layout.supportVisible).toBe(true)
+ await a.page.getByRole('button',{name:'CHAT',exact:true}).click()
+ await expect(a.page.getByText('Conversation channel open.')).toBeVisible()
+ await a.page.getByRole('button',{name:'HOME',exact:true}).click()
+
  await a.page.screenshot({path:'test-results/jarvis-mobile.png',fullPage:true})
 })
 

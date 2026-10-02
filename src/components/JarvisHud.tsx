@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Home,
@@ -84,8 +84,33 @@ function Connection() {
   );
 }
 export function JarvisHud(p: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const viewport = useRef<HTMLDivElement>(null);
+  const dashboard = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = viewport.current;
+    const canvas = dashboard.current;
+    if (!frame || !canvas) return;
+    const update = () => {
+      const scale = expanded ? 1 : Math.min(1, frame.clientWidth / 1280);
+      canvas.style.transform = scale < 1 ? `scale(${scale})` : "none";
+      frame.style.height = scale < 1 ? `${canvas.offsetHeight * scale}px` : "auto";
+      frame.style.overflowX = scale < 1 ? "hidden" : "auto";
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(frame);
+    observer.observe(canvas);
+    update();
+    return () => observer.disconnect();
+  }, [expanded]);
   return (
-    <div className="hud-dashboard">
+    <>
+      <div className="hud-pan-hint">
+        <span>{expanded ? "Swipe sideways to explore" : "Full desktop dashboard"}</span>
+        <button onClick={() => setExpanded(!expanded)}>{expanded ? "Show full overview" : "Zoom dashboard"}</button>
+      </div>
+      <div ref={viewport} className="hud-viewport" role="region" aria-label="Full JARVIS dashboard" tabIndex={0}>
+    <div ref={dashboard} className="hud-dashboard">
       <header className="hud-top">
         <ClockPanel />
         <div className="hud-weather hud-panel">
@@ -282,5 +307,7 @@ export function JarvisHud(p: Props) {
       </div>
       <footer className="hud-bottom">{p.composer}</footer>
     </div>
+    </div>
+    </>
   );
 }

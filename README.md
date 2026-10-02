@@ -84,3 +84,8 @@ The uploaded recording has also been used to create a private Fish Audio voice.
 Its returned model ID is stored as `VOICE_ID` in the encrypted DeepSpace secrets
 store. Speech generation requires separate Fish API credits, even when voice
 creation succeeds. Startup playback does not require Fish credits.
+
+The assistant dashboard preserves the complete desktop HUD on iPhone, including
+all side panels. The initial overview fits the complete dashboard on screen.
+Tap **Zoom dashboard**, then swipe horizontally to reach its controls;
+Safari pinch zoom remains enabled. Other application pages remain responsive.
