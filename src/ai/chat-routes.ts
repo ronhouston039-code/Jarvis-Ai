@@ -12,9 +12,20 @@
  * is co-located rather than scattered through the entry file.
  */
 
-import type { Context, Hono } from 'hono'
-import {z} from 'zod'
-import { createUIMessageStreamResponse, toUIMessageStream, type ModelMessage } from 'ai'
+import {
+  DEFAULT_GROQ_MODEL,
+  usesOwnerGroq,
+  streamGroq,
+  groqSummarizer,
+  groqPublicError,
+} from "./groq";
+import type { Context, Hono } from "hono";
+import { z } from "zod";
+import {
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+  type ModelMessage,
+} from "ai";
 import {
   deepSpaceAgentErrorSummary,
   prepareMessagesWithCompaction,
@@ -33,28 +44,34 @@ import {
   loadMessages,
   appendMessage,
   loggableError,
-} from 'deepspace/worker'
-import type { AgentToolAccessResult, ChatTurn, VerifyResult } from 'deepspace/worker'
-import { schemas } from '../schemas.js'
-import { buildSystemPrompt } from './tools.js'
-import type { buildTools } from './tools.js'
+} from "deepspace/worker";
+import type {
+  AgentToolAccessResult,
+  ChatTurn,
+  VerifyResult,
+} from "deepspace/worker";
+import { schemas } from "../schemas.js";
+import { buildSystemPrompt } from "./tools.js";
+import type { buildTools } from "./tools.js";
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
-import type { Env, AppContext } from '../../worker.js'
+import type { Env, AppContext } from "../../worker.js";
 
-type ResolveAccess = (req: Request, env: Env) => Promise<AgentToolAccessResult>
-type ToolFactory = typeof buildTools
+type ResolveAccess = (req: Request, env: Env) => Promise<AgentToolAccessResult>;
+type ToolFactory = typeof buildTools;
 
 function recordRoomStub(env: Env): DurableObjectStub {
   // Rooms are keyed by the immutable app id — the same `app:${DEEPSPACE_APP_ID}`
   // the client's RecordScope (SCOPE_ID) and worker.ts's own stubs use. Keying
   // by APP_NAME would read/write a room the browser never subscribes to.
-  return env.RECORD_ROOMS.get(env.RECORD_ROOMS.idFromName(`app:${env.DEEPSPACE_APP_ID}`))
+  return env.RECORD_ROOMS.get(
+    env.RECORD_ROOMS.idFromName(`app:${env.DEEPSPACE_APP_ID}`),
+  );
 }
 
 // Cap on user-supplied content length. Far above any realistic message;
 // blocks accidental DoS via megabyte payloads.
-const MAX_USER_CONTENT_LENGTH = 16_000
+const MAX_USER_CONTENT_LENGTH = 16_000;
 
 // Derive a chat title from the first user message — first non-empty line,
 // trimmed to ~50 chars with an ellipsis.
@@ -62,10 +79,10 @@ function deriveTitle(content: string): string {
   const first =
     content
       .trim()
-      .split('\n')
+      .split("\n")
       .map((l) => l.trim())
-      .find(Boolean) ?? 'Untitled'
-  return first.length <= 50 ? first : first.slice(0, 47).trimEnd() + '…'
+      .find(Boolean) ?? "Untitled";
+  return first.length <= 50 ? first : first.slice(0, 47).trimEnd() + "…";
 }
 
 export function registerAiChatRoutes(
@@ -74,68 +91,76 @@ export function registerAiChatRoutes(
   buildTools: ToolFactory,
 ): void {
   // One chokepoint for the access-decision → HTTP mapping on every chat route.
-  const requireAccess = async (c: Context<AppContext>): Promise<VerifyResult | Response> => {
-    const access = await resolveAccess(c.req.raw, c.env)
-    if (access.ok) return access.auth
+  const requireAccess = async (
+    c: Context<AppContext>,
+  ): Promise<VerifyResult | Response> => {
+    const access = await resolveAccess(c.req.raw, c.env);
+    if (access.ok) return access.auth;
     const error =
       access.status === 401
-        ? 'Unauthorized'
+        ? "Unauthorized"
         : access.status === 403
-          ? 'Forbidden'
-          : 'Temporarily unavailable'
-    return c.json({ error }, access.status)
-  }
+          ? "Forbidden"
+          : "Temporarily unavailable";
+    return c.json({ error }, access.status);
+  };
 
   // Create a new chat row owned by the caller.
-  app.post('/api/ai/chats', async (c) => {
-    const auth = await requireAccess(c)
-    if (auth instanceof Response) return auth
+  app.post("/api/ai/chats", async (c) => {
+    const auth = await requireAccess(c);
+    if (auth instanceof Response) return auth;
 
-    const parsed=z.object({title:z.string().trim().min(1).max(200).optional()}).strict().safeParse(await c.req.json().catch(()=>null))
-    if(!parsed.success)return c.json({error:'invalid_fields'},422)
-    const body=parsed.data
-    const stub = recordRoomStub(c.env)
+    const parsed = z
+      .object({ title: z.string().trim().min(1).max(200).optional() })
+      .strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
+    const body = parsed.data;
+    const stub = recordRoomStub(c.env);
     const chat = await createChat(stub, auth.userId, {
-      title: body.title ?? 'New chat',
-    })
-    return c.json({ chat })
-  })
+      title: body.title ?? "New chat",
+    });
+    return c.json({ chat });
+  });
 
   // Rename / patch a chat. Ownership enforced via getChat.
-  app.patch('/api/ai/chats/:id', async (c) => {
-    const auth = await requireAccess(c)
-    if (auth instanceof Response) return auth
+  app.patch("/api/ai/chats/:id", async (c) => {
+    const auth = await requireAccess(c);
+    if (auth instanceof Response) return auth;
 
-    const id = c.req.param('id')
-    const stub = recordRoomStub(c.env)
-    const chat = await getChat(stub, id, auth.userId)
-    if (!chat) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param("id");
+    const stub = recordRoomStub(c.env);
+    const chat = await getChat(stub, id, auth.userId);
+    if (!chat) return c.json({ error: "Not found" }, 404);
 
-    const parsed=z.object({title:z.string().trim().min(1).max(200).optional()}).strict().safeParse(await c.req.json().catch(()=>null))
-    if(!parsed.success)return c.json({error:'invalid_fields'},422)
-    const body=parsed.data
-    const patch: { title?: string } = {}
-    if (typeof body.title === 'string') patch.title = body.title
+    const parsed = z
+      .object({ title: z.string().trim().min(1).max(200).optional() })
+      .strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
+    const body = parsed.data;
+    const patch: { title?: string } = {};
+    if (typeof body.title === "string") patch.title = body.title;
     // `updateChat` re-checks the chat; a delete racing this PATCH answers 404
     // instead of `ok: true` for a write that never landed.
     if (!(await updateChat(stub, id, auth.userId, patch)))
-      return c.json({ error: 'Not found' }, 404)
-    return c.json({ ok: true })
-  })
+      return c.json({ error: "Not found" }, 404);
+    return c.json({ ok: true });
+  });
 
   // Delete chat + cascade messages.
-  app.delete('/api/ai/chats/:id', async (c) => {
-    const auth = await requireAccess(c)
-    if (auth instanceof Response) return auth
+  app.delete("/api/ai/chats/:id", async (c) => {
+    const auth = await requireAccess(c);
+    if (auth instanceof Response) return auth;
 
-    const id = c.req.param('id')
-    const stub = recordRoomStub(c.env)
-    const chat = await getChat(stub, id, auth.userId)
-    if (!chat) return c.json({ error: 'Not found' }, 404)
+    const id = c.req.param("id");
+    const stub = recordRoomStub(c.env);
+    const chat = await getChat(stub, id, auth.userId);
+    if (!chat) return c.json({ error: "Not found" }, 404);
 
-    await deleteChatCascade(stub, id, auth.userId)
-    return c.json({ ok: true })
-  })
+    await deleteChatCascade(stub, id, auth.userId);
+    return c.json({ ok: true });
+  });
 
   // Known limitation: two tabs sending to the same chatId concurrently can
   // interleave row writes (DO serializes individual writes but not the
@@ -143,50 +168,72 @@ export function registerAiChatRoutes(
   // user/assistant rows. Closing this requires per-chatId locking in the DO;
   // out of scope for this PR. Realistic impact: rare (multi-tab same-chat
   // usage); recoverable by user (one tab works correctly going forward).
-  app.post('/api/ai/chat', async (c) => {
-    const auth = await requireAccess(c)
-    if (auth instanceof Response) return auth
+  app.post("/api/ai/chat", async (c) => {
+    const auth = await requireAccess(c);
+    if (auth instanceof Response) return auth;
 
-    const authHeader = c.req.header('Authorization') ?? ''
-    const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!jwt) return c.json({ error: 'Unauthorized' }, 401)
+    const authHeader = c.req.header("Authorization") ?? "";
+    const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!jwt) return c.json({ error: "Unauthorized" }, 401);
 
-    const parsed=z.object({chatId:z.string().min(1).max(200),userMessageId:z.string().min(1).max(200),content:z.string().trim().min(1).max(MAX_USER_CONTENT_LENGTH),modelId:z.string().max(200).optional()}).strict().safeParse(await c.req.json().catch(()=>null))
-    if(!parsed.success)return c.json({error:'invalid_fields'},422)
-    const {chatId,userMessageId,content,modelId}=parsed.data
-    if (typeof chatId !== 'string' || !chatId) return c.json({ error: 'chatId is required' }, 400)
-    if (typeof userMessageId !== 'string' || !userMessageId)
-      return c.json({ error: 'userMessageId is required' }, 400)
-    if (typeof content !== 'string' || content.trim() === '')
-      return c.json({ error: 'content is required' }, 400)
+    const parsed = z
+      .object({
+        chatId: z.string().min(1).max(200),
+        userMessageId: z.string().min(1).max(200),
+        content: z.string().trim().min(1).max(MAX_USER_CONTENT_LENGTH),
+        modelId: z.string().max(200).optional(),
+      })
+      .strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
+    const { chatId, userMessageId, content, modelId } = parsed.data;
+    if (typeof chatId !== "string" || !chatId)
+      return c.json({ error: "chatId is required" }, 400);
+    if (typeof userMessageId !== "string" || !userMessageId)
+      return c.json({ error: "userMessageId is required" }, 400);
+    if (typeof content !== "string" || content.trim() === "")
+      return c.json({ error: "content is required" }, 400);
     if (content.length > MAX_USER_CONTENT_LENGTH) {
-      return c.json({ error: `content exceeds ${MAX_USER_CONTENT_LENGTH} chars` }, 413)
+      return c.json(
+        { error: `content exceeds ${MAX_USER_CONTENT_LENGTH} chars` },
+        413,
+      );
     }
-    const selectedModel = resolveDeepSpaceAgentModel(modelId, 'application')
+    const groq = usesOwnerGroq(c.env, auth.userId);
+    if (groq && !c.env.GROQ_API_KEY)
+      return c.json({ error: "groq_not_connected" }, 409);
+    const selectedModel = groq
+      ? { provider: "groq", modelId: c.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL }
+      : resolveDeepSpaceAgentModel(modelId, "application");
     if (!selectedModel) {
       // Name the valid ids: the caller has no other way to learn them here.
-      const modelIds = listDeepSpaceAgentModels('application').map((model) => model.id)
+      const modelIds = listDeepSpaceAgentModels("application").map(
+        (model) => model.id,
+      );
       return c.json(
         {
-          error: `Unknown modelId: ${modelId}. Valid: ${modelIds.join(', ')}`,
-          code: 'unknown_model',
+          error: `Unknown modelId: ${modelId}. Valid: ${modelIds.join(", ")}`,
+          code: "unknown_model",
           modelIds,
         },
         400,
-      )
+      );
     }
 
-    const stub = recordRoomStub(c.env)
-    const chat = await getChat(stub, chatId, auth.userId)
+    const stub = recordRoomStub(c.env);
+    const chat = await getChat(stub, chatId, auth.userId);
     if (!chat) {
-      console.warn('[ai-chat] REQUEST chat-not-found', { userId: auth.userId, chatId })
-      return c.json({ error: 'Chat not found' }, 404)
+      console.warn("[ai-chat] REQUEST chat-not-found", {
+        userId: auth.userId,
+        chatId,
+      });
+      return c.json({ error: "Chat not found" }, 404);
     }
 
     // Load history before writing this turn. `persistTurn` later writes user then
     // assistant as separate DO operations; the ordering is intentional, but
     // it is not atomic.
-    const history = await loadMessages(stub, chatId, auth.userId)
+    const history = await loadMessages(stub, chatId, auth.userId);
     // Carry `parts` through so compaction can truncate stale tool results AND
     // turnsToCoreMessages can rebuild assistant tool-call/tool-result pairs.
     const rawTurns: ChatTurn[] = history.map((m) => ({
@@ -194,7 +241,7 @@ export function registerAiChatRoutes(
       role: m.role,
       content: m.content,
       parts: m.parts,
-    }))
+    }));
 
     // Append the in-flight user message in memory so the LLM sees it; its DO
     // write is the first persistence operation in `persistTurn`.
@@ -205,70 +252,83 @@ export function registerAiChatRoutes(
     // orphan user from history would survive the loop (no following user in
     // raw history) and then sit next to the in-flight user, sending two
     // consecutive user messages to the LLM.
-    const allTurns: ChatTurn[] = [...rawTurns, { id: userMessageId, role: 'user', content }]
-    const turns: ChatTurn[] = []
+    const allTurns: ChatTurn[] = [
+      ...rawTurns,
+      { id: userMessageId, role: "user", content },
+    ];
+    const turns: ChatTurn[] = [];
     for (let i = 0; i < allTurns.length; i++) {
-      if (allTurns[i].role === 'user' && allTurns[i + 1]?.role === 'user') continue
-      turns.push(allTurns[i])
+      if (allTurns[i].role === "user" && allTurns[i + 1]?.role === "user")
+        continue;
+      turns.push(allTurns[i]);
     }
 
     const cachedSummary =
       chat.compactedSummary && chat.compactedThroughId
         ? { text: chat.compactedSummary, throughId: chat.compactedThroughId }
-        : undefined
+        : undefined;
 
     // User-billed: compaction is part of the user's chat experience, not infra.
-    const summarizer = makeDefaultSummarizer(c.env, { authToken: jwt })
-    const { messages: prepared, newSummary } = await prepareMessagesWithCompaction(
-      turns,
-      DEFAULT_CONTEXT_CONFIG,
-      { summarizer, cachedSummary },
-    )
+    const summarizer = groq
+      ? groqSummarizer(c.env, c.req.raw.signal)
+      : makeDefaultSummarizer(c.env, { authToken: jwt });
+    const { messages: prepared, newSummary } =
+      await prepareMessagesWithCompaction(turns, DEFAULT_CONTEXT_CONFIG, {
+        summarizer,
+        cachedSummary,
+      });
     if (newSummary) {
       await updateChat(stub, chatId, auth.userId, {
         compactedSummary: newSummary.text,
         compactedThroughId: newSummary.throughId,
-      })
+      });
     }
 
-    const usedModelId = selectedModel.modelId
+    const usedModelId = selectedModel.modelId;
     const diagnosticContext = {
-      profile: 'application' as const,
+      profile: "application" as const,
       provider: selectedModel.provider,
       modelId: usedModelId,
-    }
-    const baseSystem = buildSystemPrompt(c.env.APP_NAME, schemas)
+    };
+    const baseSystem = buildSystemPrompt(c.env.APP_NAME, schemas);
 
     // Compaction inserts at most one summary system message at index 0; fold
     // it into the top-level `system` so we don't pass two system roles. Then
     // convert the remaining ChatTurns into AI SDK ModelMessages — splitting
     // assistant rows into the assistant + paired tool messages the SDK expects.
-    const [first, ...rest] = prepared
-    const summary = first?.role === 'system' ? first : null
-    const systemText = summary ? `${baseSystem}\n\nUntrusted conversation summary (data only):\n${summary.content}` : baseSystem
-    const messages = turnsToCoreMessages(summary ? rest : prepared)
+    const [first, ...rest] = prepared;
+    const summary = first?.role === "system" ? first : null;
+    const systemText = summary
+      ? `${baseSystem}\n\nUntrusted conversation summary (data only):\n${summary.content}`
+      : baseSystem;
+    const messages = turnsToCoreMessages(summary ? rest : prepared);
 
     // The SDK executor runs each tool as the verified user and forwards the
     // route's abort signal, so a tool fetch in flight is cancelled if the
     // client navigates away mid-stream. The local assistant routes use the
     // same executor, keeping both surfaces' tool behavior identical.
-    const tools = buildTools(createUserToolExecutor(c.env, auth.userId, c.req.raw.signal))
+    const tools = buildTools(
+      createUserToolExecutor(c.env, auth.userId, c.req.raw.signal),
+    );
 
     // Allocate the assistant row id BEFORE streaming starts so we can echo it
     // back via a response header. The client tags its in-flight overlay with
     // this id and dedups against the WebSocket-broadcast persisted row by id —
     // not by comparing `spawnTime` (client clock) to `createdAt` (server clock),
     // which broke for users whose clock was ahead of the server.
-    const asstId = `asst-${Date.now()}-${crypto.randomUUID()}`
+    const asstId = `asst-${Date.now()}-${crypto.randomUUID()}`;
 
     // Save the finished turn: every step's messages (tool calls included), not
     // just the final step's. Called on normal completion and when the request
     // is aborted after at least one step completed.
-    const persistTurn = async (text: string, responseMessages: ModelMessage[]): Promise<void> => {
-      const parts = buildUiParts(responseMessages)
-      if (text.trim() === '' && parts.length === 0) {
-        console.warn('[ai-chat] FINISH empty turn, skipping persist')
-        return
+    const persistTurn = async (
+      text: string,
+      responseMessages: ModelMessage[],
+    ): Promise<void> => {
+      const parts = buildUiParts(responseMessages);
+      if (text.trim() === "" && parts.length === 0) {
+        console.warn("[ai-chat] FINISH empty turn, skipping persist");
+        return;
       }
 
       // Persist user → assistant → metadata as independent writes, not a
@@ -288,60 +348,66 @@ export function registerAiChatRoutes(
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
             if ((await fn()) === false) {
-              console.warn(`[ai-chat] ${label} skipped — chat ${chatId} no longer exists`)
-              return false
+              console.warn(
+                `[ai-chat] ${label} skipped — chat ${chatId} no longer exists`,
+              );
+              return false;
             }
-            return true
+            return true;
           } catch (err) {
-            console.error(`[ai-chat] ${label} ${attempt === 1 ? 'failed, retrying once' : 'retry failed'}: ${loggableError(err)}`)
+            console.error(
+              `[ai-chat] ${label} ${attempt === 1 ? "failed, retrying once" : "retry failed"}: ${loggableError(err)}`,
+            );
           }
         }
-        return false
-      }
+        return false;
+      };
 
-      const userOk = await writeWithRetry('user message', () =>
+      const userOk = await writeWithRetry("user message", () =>
         appendMessage(stub, {
           id: userMessageId,
           chatId,
           userId: auth.userId,
-          role: 'user',
+          role: "user",
           content,
         }),
-      )
+      );
       if (!userOk) {
         console.error(
-          '[ai-chat] FINISH aborting — user write did not land; skipping assistant + metadata to avoid orphan rows',
-        )
-        return
+          "[ai-chat] FINISH aborting — user write did not land; skipping assistant + metadata to avoid orphan rows",
+        );
+        return;
       }
-      const assistantOk = await writeWithRetry('assistant message', () =>
+      const assistantOk = await writeWithRetry("assistant message", () =>
         appendMessage(stub, {
           id: asstId,
           chatId,
           userId: auth.userId,
-          role: 'assistant',
+          role: "assistant",
           content: text,
           ...(parts.length > 0 ? { parts } : {}),
         }),
-      )
-      if (!assistantOk) return
-      await writeWithRetry('chat metadata', async () => {
+      );
+      if (!assistantOk) return;
+      await writeWithRetry("chat metadata", async () => {
         // Re-fetch so a mid-stream rename by the user isn't clobbered by a
         // stale "auto-title" derived from the captured `chat` snapshot. A
         // chat deleted mid-stream reads back as null; `updateChat` refuses
         // that case on its own (an unguarded `records.update` would upsert
         // the row back into existence), so this only decides the title.
-        const fresh = await getChat(stub, chatId, auth.userId)
-        const patch: { title?: string; model?: string } = { model: usedModelId }
-        if (fresh && (!fresh.title || fresh.title === 'New chat')) {
-          patch.title = deriveTitle(content)
+        const fresh = await getChat(stub, chatId, auth.userId);
+        const patch: { title?: string; model?: string } = {
+          model: usedModelId,
+        };
+        if (fresh && (!fresh.title || fresh.title === "New chat")) {
+          patch.title = deriveTitle(content);
         }
-        return updateChat(stub, chatId, auth.userId, patch)
-      })
-    }
+        return updateChat(stub, chatId, auth.userId, patch);
+      });
+    };
 
-    const { result } = streamDeepSpaceAgent(c.env, {
-      profile: 'application',
+    const options: Parameters<typeof streamDeepSpaceAgent>[1] = {
+      profile: "application",
       modelId: usedModelId,
       authToken: jwt,
       instructions: systemText,
@@ -351,25 +417,37 @@ export function registerAiChatRoutes(
       // any completed steps; a zero-step abort saves nothing.
       abortSignal: c.req.raw.signal,
       onError: ({ error }) => {
-        console.error(
-          `[ai-chat] stream error: ${deepSpaceAgentErrorSummary(error, diagnosticContext)}`,
-        )
+        if (groq)
+          console.error("[ai-chat] Groq provider failure", {
+            model: usedModelId,
+          });
+        else
+          console.error(
+            `[ai-chat] stream error: ${deepSpaceAgentErrorSummary(error, diagnosticContext)}`,
+          );
       },
-      onEnd: ({ text, responseMessages }) => persistTurn(text, responseMessages as ModelMessage[]),
+      onEnd: ({ text, responseMessages }) =>
+        persistTurn(text, responseMessages as ModelMessage[]),
       // AI SDK skips `onEnd` on abort; keep the steps that did complete.
       onAbort: ({ steps }) => {
-        const last = steps.at(-1)
-        if (!last) return
-        return persistTurn(last.text, steps.flatMap((step) => step.response.messages) as ModelMessage[])
+        const last = steps.at(-1);
+        if (!last) return;
+        return persistTurn(
+          last.text,
+          steps.flatMap((step) => step.response.messages) as ModelMessage[],
+        );
       },
-    })
+    };
+    const result = groq
+      ? streamGroq(c.env, options)
+      : streamDeepSpaceAgent(c.env, options).result;
 
     return createUIMessageStreamResponse({
       headers: {
         // Lets the client tag its in-flight assistant overlay with the same id
         // the worker will use in `persistTurn`, so dedup against
         // the WebSocket-broadcast row is by id (clock-skew-proof).
-        'X-Asst-Id': asstId,
+        "X-Asst-Id": asstId,
       },
       stream: toUIMessageStream({
         stream: result.stream,
@@ -384,10 +462,14 @@ export function registerAiChatRoutes(
           // `tool-input-error` / `tool-output-error` chunk and stream-level
           // error. Surface the real message so RBAC denials and validation
           // failures are debuggable; log full detail server-side.
-          console.error(`[ai-chat] response error: ${loggableError(error)}`)
-          return 'JARVIS could not complete this response. Please try again.'
+          if (groq) console.error("[ai-chat] Groq response failed");
+          else
+            console.error(`[ai-chat] response error: ${loggableError(error)}`);
+          return groq
+            ? groqPublicError(error)
+            : "JARVIS could not complete this response. Please try again.";
         },
       }),
-    })
-  })
+    });
+  });
 }

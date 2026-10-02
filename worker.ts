@@ -88,6 +88,8 @@ export class AppJobRoom extends JobRoom<Env> {
 }
 
 export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
+  LLM_MODE?: string;
+  GROQ_MODEL?: string;
   GROQ_API_KEY?: string;
   VOICE_API_KEY?: string;
   VOICE_ID?: string;

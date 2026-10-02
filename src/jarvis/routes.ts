@@ -1,3 +1,4 @@
+import { usesOwnerGroq } from "../ai/groq";
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { resolveAppMembership, createUserToolExecutor } from "deepspace/worker";
@@ -7,11 +8,22 @@ import { resolveAuth, resolveAgentAuth } from "../server/http-routes";
 import { memorySchema, reminderSchema, deletionSchema } from "./contracts";
 
 export function registerJarvisRoutes(app: Hono<AppContext>) {
-  app.get('/api/health',c=>c.json({status:'ok',assistant:'JARVIS',version:'1.0.0'}))
-  app.get('/api/ready',async c=>{
-    const result=await createUserToolExecutor(c.env,c.env.OWNER_USER_ID,c.req.raw.signal)('records.query',{collection:'users',limit:1}) as {success:boolean}
-    return c.json({status:result.success?'ready':'unavailable'},result.success?200:503)
-  })
+  app.get("/api/health", (c) =>
+    c.json({ status: "ok", assistant: "JARVIS", version: "1.0.0" }),
+  );
+  app.get("/api/ready", async (c) => {
+    const result = (await createUserToolExecutor(
+      c.env,
+      c.env.OWNER_USER_ID,
+      c.req.raw.signal,
+    )("records.query", { collection: "users", limit: 1 })) as {
+      success: boolean;
+    };
+    return c.json(
+      { status: result.success ? "ready" : "unavailable" },
+      result.success ? 200 : 503,
+    );
+  });
 
   app.use(
     "/api/ai/*",
@@ -23,7 +35,11 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
   for (const prefix of ["/api/ai/*", "/api/jarvis/*", "/_deepspace/agent/*"])
     app.use(prefix, async (c, next) => {
       if (c.req.method !== "POST" && c.req.method !== "PATCH") return next();
-      const auth = await (c.req.path.startsWith('/_deepspace/agent/') ? resolveAgentAuth : resolveAuth)(c.req.raw, c.env);
+      const auth = await (
+        c.req.path.startsWith("/_deepspace/agent/")
+          ? resolveAgentAuth
+          : resolveAuth
+      )(c.req.raw, c.env);
       if (!auth) return c.json({ error: "unauthorized" }, 401);
       const voice = c.req.path.includes("/voice/");
       const stub = c.env.CONFIRMATIONS.get(
@@ -97,7 +113,8 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     const auth = await resolveAuth(c.req.raw, c.env);
     if (!auth) return c.json({ error: "unauthorized" }, 401);
     return c.json({
-      chat: true,
+      llmMode: usesOwnerGroq(c.env, auth.userId) ? "groq" : "deepspace",
+      chat: !usesOwnerGroq(c.env, auth.userId) || !!c.env.GROQ_API_KEY,
       reminders: true,
       memories: true,
       serverTranscription:
@@ -207,7 +224,10 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
         "https://api.groq.com/openai/v1/audio/transcriptions",
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${c.env.GROQ_API_KEY}` },
+          headers: {
+            Authorization: `Bearer ${c.env.GROQ_API_KEY}`,
+            "User-Agent": "JARVIS/1.0",
+          },
           body: upload,
           signal: AbortSignal.timeout(30000),
         },
@@ -239,6 +259,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
           Authorization: `Bearer ${c.env.VOICE_API_KEY}`,
           "Content-Type": "application/json",
           model: "s1",
+          "User-Agent": "JARVIS/1.0",
         },
         body: JSON.stringify({
           text: parsed.data.text,
@@ -247,6 +268,10 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
         }),
         signal: AbortSignal.timeout(30000),
       });
+      if (response.status === 402)
+        return c.json({ error: "speech_credits_required" }, 402);
+      if (response.status === 401 || response.status === 403)
+        return c.json({ error: "speech_access_denied" }, 502);
       if (!response.ok) return c.json({ error: "speech_unavailable" }, 502);
       return new Response(response.body, {
         headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },

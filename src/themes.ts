@@ -1,8 +1,8 @@
 export const THEMES = [
   {
     id: "jarvis",
-    label: "Sea glass",
-    description: "Quiet charcoal with a sea-glass accent.",
+    label: "Holographic blue",
+    description: "Midnight blue with cyan holographic instruments.",
   },
 ] as const;
 export type ThemeId = (typeof THEMES)[number]["id"];

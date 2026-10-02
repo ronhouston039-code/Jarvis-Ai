@@ -159,6 +159,22 @@ test('iPhone-sized chat fits screen and microphone control is present',async({us
  await a.page.screenshot({path:'test-results/jarvis-mobile.png',fullPage:true})
 })
 
+test('holographic dashboard shows honest connection states and working navigation',async({users})=>{
+ const [a]=await users(1);await a.page.setViewportSize({width:1440,height:1000});await a.page.goto('/home')
+ await expect(a.page.locator('.hud-brand h1')).toHaveText('JARVIS')
+ await expect(a.page.locator('.hud-reactor')).toBeVisible()
+ await expect(a.page.locator('.hud-weather')).toContainText('Provider not connected')
+ await expect(a.page.getByRole('button',{name:'SMART HOME',exact:true})).toBeDisabled()
+ await expect(a.page.locator('.location-panel')).toContainText('Location access is not enabled')
+ await a.page.screenshot({path:'test-results/jarvis-desktop.png',fullPage:true})
+ await a.page.getByRole('button',{name:'CHAT',exact:true}).click()
+ await expect(a.page.getByText('Conversation channel open.')).toBeVisible()
+ await a.page.getByRole('button',{name:'HOME',exact:true}).click()
+ await expect(a.page.locator('.hud-reactor')).toBeVisible()
+ await a.page.getByRole('link',{name:'PRODUCTIVITY',exact:true}).click()
+ await expect(a.page.getByRole('heading',{name:'My space',exact:true})).toBeVisible()
+})
+
 test('streamed chat executes registered time tool and persists across reload',async({users})=>{
  test.skip(process.env.JARVIS_TEST_AI!=='1','Requires paid-provider boundary fixture; app internals stay real.')
  const [a,b]=await users(2);await a.page.goto('/home');await b.page.goto('/home')
@@ -201,6 +217,14 @@ test('scheduled reminders deliver a private notification',async({users})=>{
  await reminder.getByRole('button',{name:'Delete',exact:true}).click()
  await a.page.getByRole('button',{name:'Delete permanently'}).click()
  await expect(reminder).toHaveCount(0)
+})
+
+test('other users cannot spend owner Groq or Fish credentials',async({users})=>{
+ const [a]=await users(1);await a.page.goto('/home')
+ const results=await a.page.evaluate(async()=>{const path='/src/jarvis/client.ts';const module=await import(path);const caps=await module.authenticatedFetch('/api/jarvis/capabilities');const voice=await module.authenticatedFetch('/api/jarvis/voice/speak',{text:'Do not bill the owner'});return {capabilities:await caps.json(),voiceStatus:voice.status}})
+ expect(results.capabilities.llmMode).toBe('deepspace')
+ expect(results.capabilities.fishVoice).toBe(false)
+ expect(results.voiceStatus).toBe(403)
 })
 
 test('preferences persist and action quota returns 429',async({users})=>{

@@ -1,6 +1,6 @@
 # JARVIS on DeepSpace
 
-An iPhone-friendly personal assistant with streamed AI conversations, tap-to-talk dictation, device spoken replies, private conversation history, explicit preference memory, persistent one-time reminders, notifications, and action-bound deletion confirmations.
+An iPhone-friendly holographic dashboard and personal assistant with streamed AI conversations, tap-to-talk dictation, device spoken replies, private conversation history, explicit preference memory, persistent one-time reminders, notifications, and action-bound deletion confirmations.
 
 This project is the live DeepSpace adaptation. The modular Python backend in the workspace root remains separate. Weather, calendar, email, music, maps, and smart-home integrations are **not connected in this app**. No provider success is simulated in production. Background wake-word detection and push notifications are not implemented. Dictation availability depends on browser/device support; iPhone keyboard dictation is a fallback.
 
@@ -17,7 +17,7 @@ npm run lint
 npx deepspace test run all
 ```
 
-Native chat uses DeepSpace AI credits billed to the signed-in caller. The default model is the catalog's GPT Luna when available. No exposed API key from a chat transcript is used. In Settings, save your actual timezone before relative-date reminders. Unspecified reminder times prompt clarification.
+With `LLM_MODE=groq`, the app owner’s conversations and compaction use Groq with `GROQ_API_KEY`. The default Groq model is `openai/gpt-oss-120b`; `GROQ_MODEL` is an optional server setting. Other users use native DeepSpace chat billed to their own credits; they cannot spend the owner’s Groq/Fish credentials. Groq is bounded to 6 steps, 16 executed tools, 2,048 output tokens, no automatic retry, and a 45-second turn timeout. Native chat uses DeepSpace AI credits billed to the signed-in caller. The default model is the catalog's GPT Luna when available. No exposed API key from a chat transcript is used. In Settings, save your actual timezone before relative-date reminders. Unspecified reminder times prompt clarification.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ Native chat uses DeepSpace AI credits billed to the signed-in caller. The defaul
 
 All `.env.example` values are intentionally blank. Never commit `.env`, `.dev.vars`, or keys. DeepSpace generates local runtime configuration; app credentials belong in its encrypted Secrets store. Do not hand-edit `.dev.vars`.
 
-Optional owner-only server voice uses `GROQ_API_KEY` for Whisper transcription, and `VOICE_API_KEY` plus `VOICE_ID` for Fish Audio speech. Set rotated credentials through DeepSpace's Secrets UI/store and redeploy. `VOICE_ID` is the Fish voice reference identifier, not an API key. The current UI uses device speech instead; optional server endpoints can be connected by your own interface. No optional voice key is required for the shipped app.
+Optional owner-only server voice uses `GROQ_API_KEY` for Whisper transcription, and `VOICE_API_KEY` plus `VOICE_ID` for Fish Audio speech. Set rotated credentials through DeepSpace's Secrets UI/store and redeploy. `VOICE_ID` is the Fish voice reference identifier, not an API key. The UI requests Fish Audio on Listen when configured for the current account; it shows an audio player. Provider failure offers an explicit device-voice fallback. Fish Audio HTTP 402 means API funding is required at https://fish.audio/app/developers, separate from subscription credits. No optional voice key is required for the shipped app.
 
 ## Interface/API
 
