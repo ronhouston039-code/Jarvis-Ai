@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { resolveAppMembership, createUserToolExecutor } from "deepspace/worker";
 import { z } from "zod";
 import type { AppContext } from "../../worker";
-import { resolveAuth } from "../server/http-routes";
+import { resolveAuth, resolveAgentAuth } from "../server/http-routes";
 import { memorySchema, reminderSchema, deletionSchema } from "./contracts";
 
 export function registerJarvisRoutes(app: Hono<AppContext>) {
@@ -23,7 +23,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
   for (const prefix of ["/api/ai/*", "/api/jarvis/*", "/_deepspace/agent/*"])
     app.use(prefix, async (c, next) => {
       if (c.req.method !== "POST" && c.req.method !== "PATCH") return next();
-      const auth = await resolveAuth(c.req.raw, c.env);
+      const auth = await (c.req.path.startsWith('/_deepspace/agent/') ? resolveAgentAuth : resolveAuth)(c.req.raw, c.env);
       if (!auth) return c.json({ error: "unauthorized" }, 401);
       const voice = c.req.path.includes("/voice/");
       const stub = c.env.CONFIRMATIONS.get(
