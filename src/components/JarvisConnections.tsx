@@ -1,3 +1,4 @@
+import { RokuConnection } from "./RokuConnection";
 import { MusicPlaylistLinks } from "./MusicPlaylistLinks";
 import { WeatherConnect } from "./WeatherConnect";
 import { AppleMusicConnect } from "./AppleMusicConnect";
@@ -406,7 +407,13 @@ export function JarvisConnections() {
           </form>
         </>
       )}
-      {tab === "music" && <><AppleMusicConnect /><MusicPlaylistLinks /></>}
+      {tab === "music" && (
+        <>
+          <AppleMusicConnect />
+          <MusicPlaylistLinks />
+        </>
+      )}
+      {tab === "home" && <RokuConnection />}
       {(tab === "home" || tab === "music") && (
         <>
           <h2>

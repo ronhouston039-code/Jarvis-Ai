@@ -1,3 +1,4 @@
+import { rokuAction } from "./roku";
 import { musicLinkInput } from "./music-links";
 import { weatherSnapshot, findCities } from "./weather";
 import { usableAppleMusicToken } from "./apple-music-config";
@@ -25,6 +26,57 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
     if (!membership?.member) return c.json({ error: "forbidden" }, 403);
     return next();
   });
+  for (const [suffix, operation] of [
+    ["status", "roku_execute"],
+    ["action", "roku_execute"],
+    ["power/request", "roku_power_request"],
+    ["power/approve", "roku_power_approve"],
+    ["power/cancel", "roku_power_cancel"],
+    ["disconnect", "roku_disconnect"],
+    ["connect", "roku_connect"],
+  ] as const) {
+    const handler = async (c: import("hono").Context<AppContext>) => {
+      const auth = (await resolveAuth(c.req.raw, c.env))!;
+      if (auth.userId !== c.env.OWNER_USER_ID)
+        return c.json({ error: "owner_roku_only" }, 403);
+      const body =
+        suffix === "status"
+          ? { tool: "roku_get_status" }
+          : await c.req.json().catch(() => null);
+      if (
+        ["power/request", "connect", "disconnect"].includes(suffix) &&
+        !z.object({}).strict().safeParse(body).success
+      )
+        return c.json({ error: "invalid_fields" }, 422);
+      if (suffix === "action" && !rokuAction.safeParse(body).success)
+        return c.json({ error: "invalid_roku_action" }, 422);
+      if (
+        (suffix === "power/approve" || suffix === "power/cancel") &&
+        !z
+          .object({ token: z.string().min(1).max(100) })
+          .strict()
+          .safeParse(body).success
+      )
+        return c.json({ error: "invalid_fields" }, 422);
+      return c.env.CONFIRMATIONS.get(
+        c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
+      ).fetch(
+        new Request("https://internal/roku", {
+          method: "POST",
+          body: JSON.stringify({
+            userId: auth.userId,
+            operation,
+            ...(suffix === "power/approve" || suffix === "power/cancel"
+              ? { token: body.token }
+              : { action: body }),
+          }),
+        }),
+      );
+    };
+    if (suffix === "status")
+      app.get(`/api/jarvis/connections/roku/${suffix}`, handler);
+    else app.post(`/api/jarvis/connections/roku/${suffix}`, handler);
+  }
   app.get("/api/jarvis/connections/apple-music/config", async (c) => {
     const auth = (await resolveAuth(c.req.raw, c.env))!;
     if (auth.userId !== c.env.OWNER_USER_ID)

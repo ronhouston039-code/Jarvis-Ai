@@ -1,0 +1,18 @@
+export const rokuKeys = [
+  "Home",
+  "Back",
+  "Up",
+  "Down",
+  "Left",
+  "Right",
+  "Select",
+  "Play",
+  "Rev",
+  "Fwd",
+  "VolumeUp",
+  "VolumeDown",
+  "VolumeMute",
+  "InputHDMI1",
+  "InputHDMI2",
+  "InputHDMI3",
+] as const;

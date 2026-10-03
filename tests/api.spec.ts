@@ -36,3 +36,22 @@ test("JARVIS refuses unauthenticated writes and voice", async ({ request }) => {
   ).toBe(401);
   expect((await request.get("/api/jarvis/capabilities")).status()).toBe(401);
 });
+
+test("Roku routes reject anonymous callers", async ({ request }) => {
+  expect(
+    (await request.get("/api/jarvis/connections/roku/status")).status(),
+  ).toBe(401);
+  for (const suffix of [
+    "action",
+    "power/request",
+    "power/approve",
+    "disconnect",
+  ])
+    expect(
+      (
+        await request.post("/api/jarvis/connections/roku/" + suffix, {
+          data: {},
+        })
+      ).status(),
+    ).toBe(401);
+});

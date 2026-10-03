@@ -1,3 +1,5 @@
+import { createRokuExecutor } from "../jarvis/roku-ledger";
+import { privateRokuIp } from "../jarvis/roku";
 /**
  * AI chat routes — multi-turn tool-use via Vercel AI SDK + DeepSpace proxy.
  *
@@ -309,6 +311,11 @@ export function registerAiChatRoutes(
     // same executor, keeping both surfaces' tool behavior identical.
     const tools = buildTools(
       createUserToolExecutor(c.env, auth.userId, c.req.raw.signal),
+      auth.userId === c.env.OWNER_USER_ID &&
+        c.env.ROKU_TV_IP &&
+        privateRokuIp(c.env.ROKU_TV_IP)
+        ? createRokuExecutor(c.env, auth.userId)
+        : undefined,
     );
 
     // Allocate the assistant row id BEFORE streaming starts so we can echo it

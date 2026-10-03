@@ -712,6 +712,66 @@ test("Fish MP3 playback animates the orb and microphone cancels speech", async (
   ).toBe(true);
 });
 
+test("Roku card reports offline and requires the exact power-off sheet", async ({
+  users,
+}) => {
+  const [a] = await users(1);
+  let approvals = 0;
+  let cancellations = 0;
+  await a.page.route("**/api/jarvis/connections/roku/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/status"))
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ online: false, error: "roku_offline" }),
+      });
+    if (path.endsWith("/power/request"))
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ token: "test-bound-token" }),
+      });
+    if (path.endsWith("/power/approve")) {
+      approvals++;
+      expect(route.request().postDataJSON()).toEqual({
+        token: "test-bound-token",
+      });
+    }
+    if (path.endsWith("/power/cancel")) cancellations++;
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ accepted: true }),
+    });
+  });
+  await a.page.goto("/connections?tab=home");
+  const card = a.page.getByRole("region", {
+    name: "TCL Roku TV connection",
+    exact: true,
+  });
+  await card
+    .getByRole("button", { name: "Test connection", exact: true })
+    .click();
+  await expect(card.getByText("Offline", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Turn off TV", exact: true }).click();
+  const sheet = card.getByRole("dialog");
+  await expect(
+    sheet.getByText("Turn off TCL Roku TV now?", { exact: true }),
+  ).toBeVisible();
+  expect(approvals).toBe(0);
+  await sheet.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  expect(approvals).toBe(0);
+  expect(cancellations).toBe(1);
+  await card.getByRole("button", { name: "Turn off TV", exact: true }).click();
+  await sheet.getByRole("button", { name: "Turn off TV", exact: true }).click();
+  await expect(
+    card.getByText("Power-off command accepted by TCL Roku TV.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(approvals).toBe(1);
+});
+
 test("Apple Music is unavailable without owner developer configuration", async ({
   users,
 }) => {

@@ -1,3 +1,4 @@
+import { handleRoku } from "./roku-ledger";
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../../worker";
 import { buildCronContext, deleteChatCascade, getChat } from "deepspace/worker";
@@ -28,14 +29,15 @@ export class ConfirmationRoom extends DurableObject<Env> {
     };
     if (!body.userId)
       return Response.json({ error: "unauthorized" }, { status: 401 });
+    if (body.operation.startsWith("roku_"))
+      return handleRoku(this.ctx.storage.sql, this.env, body);
     if (body.operation === "rate") {
       const now = Math.floor(Date.now() / 60000);
       const rows = this.ctx.storage.sql
-        .exec<{ window: number; count: number }>(
-          "SELECT window,count FROM quotas WHERE user_id=? AND bucket=?",
-          body.userId,
-          body.bucket ?? "default",
-        )
+        .exec<{
+          window: number;
+          count: number;
+        }>("SELECT window,count FROM quotas WHERE user_id=? AND bucket=?", body.userId, body.bucket ?? "default")
         .toArray();
       const count = rows[0]?.window === now ? rows[0].count : 0;
       if (count >= (body.limit ?? 20))
@@ -87,16 +89,21 @@ export class ConfirmationRoom extends DurableObject<Env> {
       return Response.json({ token, action: action.data, expiresIn: 300 });
     }
     const rows = this.ctx.storage.sql
-      .exec<{ action: string }>(
-        "SELECT action FROM approvals WHERE token=? AND user_id=? AND used=0 AND expires>?",
-        body.token ?? "",
-        body.userId,
-        Date.now(),
-      )
+      .exec<{
+        action: string;
+      }>("SELECT action FROM approvals WHERE token=? AND user_id=? AND used=0 AND expires>?", body.token ?? "", body.userId, Date.now())
       .toArray();
     if (!rows.length)
       return Response.json(
         { error: "invalid_or_expired_confirmation" },
+        { status: 409 },
+      );
+    const approvedDeletion = deletionSchema.safeParse(
+      JSON.parse(rows[0].action),
+    );
+    if (!approvedDeletion.success)
+      return Response.json(
+        { error: "confirmation_action_mismatch" },
         { status: 409 },
       );
     // No await between lookup and claim: one token cannot execute twice.
@@ -104,7 +111,7 @@ export class ConfirmationRoom extends DurableObject<Env> {
       "UPDATE approvals SET used=1 WHERE token=?",
       body.token ?? "",
     );
-    const action = deletionSchema.parse(JSON.parse(rows[0].action));
+    const action = approvedDeletion.data;
     const owned = (await context.records.query(action.collection, {
       where: { recordId: action.recordId },
       limit: 1,
