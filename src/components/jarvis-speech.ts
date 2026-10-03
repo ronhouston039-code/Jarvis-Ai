@@ -7,7 +7,7 @@ export function spokenVersion(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
   const sentences = plain.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) ?? [plain];
-  const brief = sentences.slice(0, 3).join(" ").replace(/\s+/g, " ").trim();
+  const brief = sentences.slice(0, 2).join(" ").replace(/\s+/g, " ").trim();
   return brief.length > 900
     ? brief.slice(0, 897).replace(/\s+\S*$/, "") + "…"
     : brief;
