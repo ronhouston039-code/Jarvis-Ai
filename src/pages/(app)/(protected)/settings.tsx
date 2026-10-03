@@ -1,3 +1,5 @@
+import { BriefingPreview } from "../../../components/BriefingPreview";
+import { ProactivePreferences } from "../../../components/ProactivePreferences";
 import { disconnectAppleMusic } from "../../../components/apple-music";
 import { signOut, useUser } from "deepspace";
 import { JarvisPreferences } from "../../../components/JarvisPreferences";
@@ -26,6 +28,8 @@ export default function SettingsPage() {
       </section>
       <h2>Personal preferences</h2>
       <JarvisPreferences />
+      <ProactivePreferences />
+      <BriefingPreview />
       <h2>Voice on iPhone</h2>
       <p className="muted leading-7">
         Tap the microphone in a conversation to dictate. Review the transcript,

@@ -161,7 +161,7 @@ test("private memory isolates users and deletion requires an action-bound confir
   await Promise.all([a.page.goto("/personal"), b.page.goto("/personal")]);
   const content = `Private memory ${Date.now()}`;
   await a.page.getByRole("textbox", { name: "New memory" }).fill(content);
-  await a.page.getByRole("button", { name: "Remember", exact: true }).click();
+  await a.page.locator("form").filter({ has: a.page.getByRole("textbox", { name: "New memory" }) }).getByRole("button", { name: "Remember", exact: true }).click();
   await expect(a.page.getByText(content, { exact: true })).toBeVisible();
   await expect(b.page.getByText(content, { exact: true })).toHaveCount(0);
   const card = a.page.locator(".personal-card").filter({ hasText: content });
@@ -874,6 +874,13 @@ test("preferences persist and action quota returns 429", async ({ users }) => {
   await expect(
     a.page.getByText("Preferences saved.", { exact: true }),
   ).toBeVisible();
+  await a.page.getByLabel("Daily briefing", { exact: true }).selectOption("off");
+  await a.page.getByLabel("Quiet hours start", { exact: true }).fill("23:00");
+  await a.page.getByRole("button", { name: "Save proactive preferences", exact: true }).click();
+  await expect(a.page.getByText("Preferences saved. Scheduled proactive services are not active yet.", { exact: true })).toBeVisible();
+  await a.page.reload();
+  await expect(a.page.getByLabel("Daily briefing", { exact: true })).toHaveValue("off");
+  await expect(a.page.getByLabel("Quiet hours start", { exact: true })).toHaveValue("23:00");
   const statuses = await a.page.evaluate(async () => {
     const path = "/src/jarvis/client.ts";
     const module = await import(path);

@@ -149,6 +149,7 @@ export const personalSchemas: CollectionSchema[] = [
     uniqueOn: ["userId"],
     columns: [
       userColumn,
+      { name: "proactive", storage: "text", interpretation: "plain", default: "" },
       {
         name: "timezone",
         storage: "text",
@@ -165,7 +166,7 @@ export const personalSchemas: CollectionSchema[] = [
         default: "normal",
       },
     ],
-    permissions: own(true, ["timezone", "responseMode"]),
+    permissions: own(true, ["timezone", "responseMode", "proactive"]),
   },
   {
     name: "notifications",

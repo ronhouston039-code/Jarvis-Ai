@@ -130,6 +130,11 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
             }
           }),
         responseMode: z.enum(["normal", "brief", "technical"]),
+        proactive: z.string().max(1000).refine((value) => {
+          try {
+            return z.object({ dailyBriefing: z.boolean(), calendarAlerts: z.boolean(), weatherAlerts: z.boolean(), focusBlocks: z.enum(["ask", "off"]), emailReminders: z.boolean(), marketing: z.boolean(), quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) }).strict().safeParse(JSON.parse(value)).success;
+          } catch { return false; }
+        }).optional(),
       })
       .strict()
       .safeParse(await c.req.json().catch(() => null));
