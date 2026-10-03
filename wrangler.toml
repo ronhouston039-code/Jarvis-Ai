@@ -31,7 +31,7 @@ DEEPSPACE_APP_ID = "app_01M3XQA9S9ZGZN1VCPEF5060XF"
 APP_NAME = "JARVIS"
 # Exact comma-separated native callback URIs. Set this before deploying an
 # Expo client, for example: "veriluma://auth/callback".
-NATIVE_AUTH_REDIRECT_URIS = ""
+NATIVE_AUTH_REDIRECT_URIS = "jarvis-companion://auth/callback"
 
 [[migrations]]
 tag = "v1"

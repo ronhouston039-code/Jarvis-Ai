@@ -63,7 +63,6 @@ Vitest checks contracts and permission invariants. Playwright checks real auth, 
 
 In a managed development container whose workerd runtime cannot use the inherited proxy, run `node scripts/managed-dev-proxy.mjs`, then run tests with `JARVIS_DEV_PROXY=1 JARVIS_TEST_AI=1 NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt npx deepspace test run all`. This patches only the local installed runtime adapter, routes egress through Node's trusted session proxy, and fixtures only the external OpenAI completion endpoint. It does not change app source, authentication, authorization, tools or storage, and is never enabled for deployment. Without that fixture the paid AI test explicitly skips; the rest of the suite still runs.
 
-
 ```sh
 git add .
 git commit -m "Build JARVIS personal assistant"
@@ -188,15 +187,31 @@ Open-Meteo forecast data. Provider failures never expose API keys or raw error b
 `GET /api/jarvis/connections/cities?q=...` performs bounded Open-Meteo geocoding.
 Displayed temperatures, track names and connection statuses are not hardcoded demos.
 
-
 Fish voice: store FISH_AUDIO_API_KEY in DeepSpace secrets (never frontend code). POST /api/tts accepts authenticated JSON {"text":"Good afternoon."}, at most 1000 characters, and returns audio/mpeg. Only the owner may spend this key; the voice rate limit is five requests per minute. Fish reference ID: 612b878b113047d9a770c069c8b4fdfe. HTTP 402 requires Fish API credits. Settings has Speak replies, Test voice, and Slow/Normal/Fast playback. Stop, microphone activation, page hiding and navigation cancel speech. Wake-word activation is not configured.
 
-### TCL Roku TV (server-side ECP)
+### Smart home: secure Home Assistant bridge
 
-Set `ROKU_TV_IP` in DeepSpace Secrets, then redeploy. The provider accepts only a private IPv4 address and constructs `http://${ROKU_TV_IP}:8060` internally; no endpoint accepts a caller-supplied host, URL or port. ECP runs entirely on the server. The browser talks only to authenticated JARVIS routes. Optional `ROKU_ALLOWED_APPS` is a saved JSON allow-list of objects such as `[{"id":"12","name":"Netflix"}]`; validate the IDs against your Roku before saving. An absent/invalid list disables app launches.
+Cloud direct Roku ECP access is retired. `ROKU_TV_IP` is not used by deployed cloud execution; legacy Roku routes reject access with `home_assistant_bridge_required`. Never expose Roku port 8060 publicly. Control a Roku through an approved Home Assistant media entity Native Apple Home media/TV control is outside the first release.
 
-Connections → Home → TCL Roku TV provides Test connection, a validated remote, and Disconnect / remove TV. Testing uses `/query/device-info`; failed requests show Offline. Basic navigation/playback/volume execute only after a user command. Play is Roku's play/pause toggle, and accepted keypresses do not verify final device state. Relative volume is bounded to five steps and partial results are never automatically retried. Power off always displays “Turn off TCL Roku TV now?” with Cancel / Turn off TV. The 60-second confirmation is bound to the authenticated owner, power-off action and exact configured TV IP, consumed before network I/O, and invalidated by disconnect. Cancel revokes it. Consequential operations record sanitized audit entries; no arbitrary shell commands or ECP URLs are available.
+Configure only server-side encrypted secrets: `HOME_ASSISTANT_URL` (public DNS HTTPS origin, default TLS port), `HOME_ASSISTANT_TOKEN` (long-lived token), and `HOME_ASSISTANT_ALLOWED_DEVICES` (explicit JSON allow-list). Missing optional credentials disable the card rather than breaking chat. No Home Assistant connection has been provisioned here.
 
-Owner-only routes under `/api/jarvis/connections/roku`: `GET status`, `POST action` (discriminated `{tool,...}` schema), `POST power/request`, `POST power/approve` and `POST power/cancel` (`{token}`), `POST connect` and `POST disconnect` (`{}`). Normal authentication, membership, request limits and rate limits apply. Owner chat tools are `roku_get_status`, `roku_keypress`, `roku_power_off` (confirmation preparation only), `roku_launch_app`, and `roku_set_volume`.
+Example allow-list format (entity values must match your own configured Home Assistant):
 
-**Networking requirement:** a cloud-hosted DeepSpace Worker cannot normally reach your home LAN's `192.168.x.x` address. This integration needs a server with a secure route to that same LAN or a securely designed local bridge. Setting an IP alone does not connect a cloud app to your TV. Do not expose Roku port 8060 publicly: ECP itself has no application authentication. No bridge, port forwarding or VPN has been set up by this change. Roku must also allow mobile-app/network control in its device settings. Until those prerequisites are satisfied, JARVIS reports Offline instead of claiming control succeeded.
+```json
+[
+  {
+    "entity": "light.bedroom",
+    "name": "Bedroom light",
+    "room": "Bedroom",
+    "actions": ["status", "on", "off", "brightness"]
+  }
+]
+```
+
+Home Assistant runs at home and pairs/bridges supported accessories locally. Jarvis talks only to its authenticated public HTTPS API, never private IPs, HomeKit or device ports. Redirects, URL credentials, arbitrary URLs/services/entities and local domains/IPs are rejected. The owner-only Connections → Home card shows normalized selected devices, real state/time, Test connection, Disconnect/Reconnect, capabilities and exact expiring confirmations. Sensitive categories, unlock/open/disarm, all scenes, and media power off require a consumed, configuration-bound server token. Camera controls and purchases/account changes are unsupported; privacy/security switches require confirmation. HTTP acceptance is not proof of physical completion; no blind write retries occur.
+
+Owner-scoped generic tools automatically expose approved capabilities through `list_home_devices`, `get_home_device_status`, `control_home_device`. Secrets and raw provider errors/entity IDs/private addresses never appear in normal UI. Home Assistant integration and native Apple Home are separate providers.
+
+### Native iOS companion
+
+See [ios/README.md](ios/README.md) and open `ios/JarvisCompanion/JarvisCompanion.xcodeproj` on a Mac. Direct Apple Home control is native-only, with local approvals and typed first-release actions. Web chat can queue explicitly shared opaque actions for the foreground companion. Authenticated sanitized audits appear in My space's activity log. A signed build on an iPhone is required to verify actual HomeKit connection; no native app has been installed or published from this workspace.

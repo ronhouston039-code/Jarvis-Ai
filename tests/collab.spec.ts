@@ -712,47 +712,70 @@ test("Fish MP3 playback animates the orb and microphone cancels speech", async (
   ).toBe(true);
 });
 
-test("Roku card reports offline and requires the exact power-off sheet", async ({
+test("Home Assistant shows approved devices and binds sensitive confirmations", async ({
   users,
 }) => {
   const [a] = await users(1);
-  let approvals = 0;
-  let cancellations = 0;
-  await a.page.route("**/api/jarvis/connections/roku/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith("/status"))
+  let approvals = 0,
+    cancellations = 0;
+  const device = {
+    id: "ha-1234567890abcdef12345678",
+    name: "TCL Roku TV",
+    room: "Living room",
+    type: "media",
+    online: true,
+    state: "on",
+    lastUpdated: new Date().toISOString(),
+    actions: ["off"],
+    confirmationActions: ["off"],
+  };
+  await a.page.route(
+    "**/api/jarvis/connections/home-assistant/**",
+    async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith("/config"))
+        return route.fulfill({ json: { available: true, enabled: true } });
+      if (path.endsWith("/devices"))
+        return route.fulfill({ json: { devices: [device], connected: true } });
+      if (path.endsWith("/action"))
+        return route.fulfill({
+          json: {
+            status: "confirmation_required",
+            token: "exact-token",
+            prompt: "Turn off TCL Roku TV now?",
+            action: { deviceId: device.id, action: "off" },
+          },
+        });
+      if (path.endsWith("/approve")) {
+        expect(route.request().postDataJSON()).toEqual({
+          token: "exact-token",
+        });
+        approvals++;
+      }
+      if (path.endsWith("/cancel")) cancellations++;
       return route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ online: false, error: "roku_offline" }),
+        json: {
+          status: "accepted",
+          message: "Command accepted. Check the device.",
+        },
       });
-    if (path.endsWith("/power/request"))
-      return route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ token: "test-bound-token" }),
-      });
-    if (path.endsWith("/power/approve")) {
-      approvals++;
-      expect(route.request().postDataJSON()).toEqual({
-        token: "test-bound-token",
-      });
-    }
-    if (path.endsWith("/power/cancel")) cancellations++;
-    return route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ accepted: true }),
-    });
-  });
+    },
+  );
   await a.page.goto("/connections?tab=home");
   const card = a.page.getByRole("region", {
-    name: "TCL Roku TV connection",
+    name: "Home Assistant connection",
     exact: true,
   });
   await card
-    .getByRole("button", { name: "Test connection", exact: true })
+    .getByRole("button", {
+      name: "Test connection / Refresh devices",
+      exact: true,
+    })
     .click();
-  await expect(card.getByText("Offline", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Turn off TV", exact: true }).click();
+  await expect(card.getByText("TCL Roku TV", { exact: true })).toBeVisible();
+  await card
+    .getByRole("button", { name: "off · Confirm", exact: true })
+    .click();
   const sheet = card.getByRole("dialog");
   await expect(
     sheet.getByText("Turn off TCL Roku TV now?", { exact: true }),
@@ -760,16 +783,51 @@ test("Roku card reports offline and requires the exact power-off sheet", async (
   expect(approvals).toBe(0);
   await sheet.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(sheet).toHaveCount(0);
-  expect(approvals).toBe(0);
   expect(cancellations).toBe(1);
-  await card.getByRole("button", { name: "Turn off TV", exact: true }).click();
-  await sheet.getByRole("button", { name: "Turn off TV", exact: true }).click();
+  await card
+    .getByRole("button", { name: "off · Confirm", exact: true })
+    .click();
+  await sheet
+    .getByRole("button", { name: "Confirm action", exact: true })
+    .click();
   await expect(
-    card.getByText("Power-off command accepted by TCL Roku TV.", {
+    card.getByText("Command accepted. Check the device.", { exact: true }),
+  ).toBeVisible();
+  expect(approvals).toBe(1);
+});
+
+test("Apple Home activity log shows sanitized local reports", async ({
+  users,
+}) => {
+  const [a] = await users(1);
+  await a.page.route("**/api/homekit/audit", (route) =>
+    route.fulfill({
+      json: {
+        events: [
+          {
+            id: "report",
+            deviceName: "Living Room Lamp",
+            actionType: "power_on",
+            state: "completed",
+            timestamp: new Date().toISOString(),
+            message: "Verified on by Apple Home readback.",
+          },
+        ],
+      },
+    }),
+  );
+  await a.page.goto("/personal");
+  const activity = a.page.getByRole("region", {
+    name: "Apple Home activity log",
+  });
+  await expect(
+    activity.getByText("Living Room Lamp · power on · Completed", {
       exact: true,
     }),
   ).toBeVisible();
-  expect(approvals).toBe(1);
+  await expect(
+    activity.getByText("Verified on by Apple Home readback.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("Apple Music is unavailable without owner developer configuration", async ({

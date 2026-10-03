@@ -1,3 +1,4 @@
+import { HomeKitActivity } from "../../../components/HomeKitActivity";
 import { useState } from "react";
 import { getAuthToken, useAuthProfileReady, useQuery } from "deepspace";
 import { Button, Input, ConfirmModal } from "../../../components/ui";
@@ -68,6 +69,7 @@ export default function PersonalPage() {
   return (
     <div className="personal-page">
       <p className="eyebrow">ONLY WHAT MATTERS</p>
+      <HomeKitActivity />
       <h1>My space</h1>
       <p className="muted">
         Your reminders, memories, and conversations. Always yours to control.
@@ -135,21 +137,45 @@ export default function PersonalPage() {
         </div>
       ))}
       <h2>Memory</h2>
-      {showPreferenceOffer && !memories.some((m) => m.data.content === "Prefers concise briefings and Fahrenheit.") && (
-        <section className="personal-card" aria-label="Remember preferences">
-          <div>
-            <p>Concise briefings and Fahrenheit — would you like me to remember that preference?</p>
-            <div className="connection-actions">
-              <Button variant="outline" disabled={busy} onClick={() => setShowPreferenceOffer(false)}>Not now</Button>
-              <Button disabled={busy} onClick={() => void run(async () => {
-                await api("memories", { content: "Prefers concise briefings and Fahrenheit.", category: "preference" });
-                setShowPreferenceOffer(false);
-              })}>Remember</Button>
+      {showPreferenceOffer &&
+        !memories.some(
+          (m) => m.data.content === "Prefers concise briefings and Fahrenheit.",
+        ) && (
+          <section className="personal-card" aria-label="Remember preferences">
+            <div>
+              <p>
+                Concise briefings and Fahrenheit — would you like me to remember
+                that preference?
+              </p>
+              <div className="connection-actions">
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setShowPreferenceOffer(false)}
+                >
+                  Not now
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await api("memories", {
+                        content: "Prefers concise briefings and Fahrenheit.",
+                        category: "preference",
+                      });
+                      setShowPreferenceOffer(false);
+                    })
+                  }
+                >
+                  Remember
+                </Button>
+              </div>
+              <small>
+                Saved only after you tap Remember. You can delete it below.
+              </small>
             </div>
-            <small>Saved only after you tap Remember. You can delete it below.</small>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
       <p className="muted mb-4 text-sm">
         JARVIS remembers preferences only when you ask. Conversation history is
         stored separately.

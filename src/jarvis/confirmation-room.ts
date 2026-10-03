@@ -1,3 +1,5 @@
+import { handleNativeHome } from "./native-home-ledger";
+import { handleHomeAssistant } from "./home-assistant-ledger";
 import { handleRoku } from "./roku-ledger";
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../../worker";
@@ -29,6 +31,10 @@ export class ConfirmationRoom extends DurableObject<Env> {
     };
     if (!body.userId)
       return Response.json({ error: "unauthorized" }, { status: 401 });
+    if (body.operation.startsWith("native_home_"))
+      return handleNativeHome(this.ctx.storage.sql, body);
+    if (body.operation.startsWith("home_"))
+      return handleHomeAssistant(this.ctx.storage.sql, this.env, body);
     if (body.operation.startsWith("roku_"))
       return handleRoku(this.ctx.storage.sql, this.env, body);
     if (body.operation === "rate") {
@@ -37,7 +43,11 @@ export class ConfirmationRoom extends DurableObject<Env> {
         .exec<{
           window: number;
           count: number;
-        }>("SELECT window,count FROM quotas WHERE user_id=? AND bucket=?", body.userId, body.bucket ?? "default")
+        }>(
+          "SELECT window,count FROM quotas WHERE user_id=? AND bucket=?",
+          body.userId,
+          body.bucket ?? "default",
+        )
         .toArray();
       const count = rows[0]?.window === now ? rows[0].count : 0;
       if (count >= (body.limit ?? 20))
@@ -91,7 +101,12 @@ export class ConfirmationRoom extends DurableObject<Env> {
     const rows = this.ctx.storage.sql
       .exec<{
         action: string;
-      }>("SELECT action FROM approvals WHERE token=? AND user_id=? AND used=0 AND expires>?", body.token ?? "", body.userId, Date.now())
+      }>(
+        "SELECT action FROM approvals WHERE token=? AND user_id=? AND used=0 AND expires>?",
+        body.token ?? "",
+        body.userId,
+        Date.now(),
+      )
       .toArray();
     if (!rows.length)
       return Response.json(

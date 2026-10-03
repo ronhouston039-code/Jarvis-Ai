@@ -55,3 +55,24 @@ test("Roku routes reject anonymous callers", async ({ request }) => {
       ).status(),
     ).toBe(401);
 });
+
+test("Native HomeKit and Home Assistant routes reject anonymous access", async ({
+  request,
+}) => {
+  for (const path of [
+    "/api/homekit/audit",
+    "/api/homekit/actions",
+    "/api/jarvis/connections/home-assistant/config",
+    "/api/jarvis/connections/home-assistant/devices",
+  ])
+    expect((await request.get(path)).status()).toBe(401);
+  for (const path of [
+    "/api/homekit/audit",
+    "/api/homekit/actions",
+    "/api/homekit/requests",
+    "/api/homekit/poll",
+    "/api/jarvis/connections/home-assistant/action",
+    "/api/jarvis/connections/home-assistant/approve",
+  ])
+    expect((await request.post(path, { data: {} })).status()).toBe(401);
+});

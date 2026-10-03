@@ -1,3 +1,4 @@
+import { HomeKitActivity } from "./HomeKitActivity";
 import { JarvisSpeechPlayer, type VoiceSpeed } from "./jarvis-speech";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, listDeepSpaceAgentModels } from "deepspace";
@@ -365,6 +366,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       }
       conversation={
         <div className="message-list" aria-live="polite">
+          <HomeKitActivity compact />
           {messages.map((m) => (
             <article key={m.id} className={`message ${m.role}`}>
               <div className="message-label">

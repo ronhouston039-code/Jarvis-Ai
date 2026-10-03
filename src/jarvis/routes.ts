@@ -1,3 +1,9 @@
+import {
+  nativeAuditSchema,
+  nativeAuditKey,
+  localManifestSchema,
+  localRequestSchema,
+} from "./native-home-audit";
 import { weatherSnapshot, weatherCoordinatesQuery } from "./weather";
 import { registerConnectionRoutes } from "./connection-routes";
 import { startupAudio } from "./startup-audio";
@@ -39,13 +45,15 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     "/api/ai/*",
     "/api/jarvis/*",
     "/api/tts",
+    "/api/homekit/*",
     "/_deepspace/agent/*",
   ])
     app.use(prefix, async (c, next) => {
       if (
         c.req.method !== "POST" &&
         c.req.method !== "PATCH" &&
-        !c.req.path.startsWith("/api/jarvis/connections/")
+        !c.req.path.startsWith("/api/jarvis/connections/") &&
+        !c.req.path.startsWith("/api/homekit/")
       )
         return next();
       const auth = await (
@@ -64,8 +72,20 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
           body: JSON.stringify({
             userId: auth.userId,
             operation: "rate",
-            bucket: voice ? "voice" : "actions",
-            limit: voice ? 5 : 30,
+            bucket: c.req.path.startsWith("/api/homekit/")
+              ? "homekit"
+              : voice
+                ? "voice"
+                : c.req.method === "GET"
+                  ? "connection_reads"
+                  : "actions",
+            limit: c.req.path.startsWith("/api/homekit/")
+              ? 60
+              : voice
+                ? 5
+                : c.req.method === "GET"
+                  ? 60
+                  : 30,
           }),
         }),
       );
@@ -184,6 +204,81 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     )) as { success: boolean };
     return c.json(result, result.success ? 200 : 403);
   });
+  app.use(
+    "/api/homekit/*",
+    bodyLimit({
+      maxSize: 32000,
+      onError: (c) => c.json({ error: "request_too_large" }, 413),
+    }),
+  );
+  app.post("/api/homekit/audit", async (c) => {
+    const auth = await resolveAuth(c.req.raw, c.env);
+    if (!auth) return c.json({ error: "unauthorized" }, 401);
+    const membership = await resolveAppMembership(
+      c.env,
+      auth.userId,
+      c.req.raw.signal,
+    );
+    if (!membership?.member) return c.json({ error: "forbidden" }, 403);
+    const event = nativeAuditSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
+    const key = nativeAuditKey.safeParse(c.req.header("Idempotency-Key"));
+    if (!event.success || !key.success)
+      return c.json({ error: "invalid_audit" }, 422);
+    return c.env.CONFIRMATIONS.get(
+      c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
+    ).fetch(
+      new Request("https://internal/native-audit", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: auth.userId,
+          operation: "native_home_audit",
+          token: key.data,
+          action: event.data,
+        }),
+      }),
+    );
+  });
+  for (const [method, path, operation] of [
+    ["GET", "/api/homekit/audit", "native_home_audits"],
+    ["DELETE", "/api/homekit/audit", "native_home_clear"],
+    ["GET", "/api/homekit/actions", "native_home_actions"],
+    ["POST", "/api/homekit/actions", "native_home_manifest"],
+    ["POST", "/api/homekit/requests", "native_home_request"],
+    ["POST", "/api/homekit/poll", "native_home_poll"],
+  ] as const)
+    app.on(method, path, async (c) => {
+      const auth = await resolveAuth(c.req.raw, c.env);
+      if (!auth) return c.json({ error: "unauthorized" }, 401);
+      const membership = await resolveAppMembership(
+        c.env,
+        auth.userId,
+        c.req.raw.signal,
+      );
+      if (!membership?.member) return c.json({ error: "forbidden" }, 403);
+      let action: unknown;
+      if (method === "POST") {
+        const schema =
+          operation === "native_home_manifest"
+            ? localManifestSchema
+            : operation === "native_home_request"
+              ? localRequestSchema
+              : z.object({}).strict();
+        const parsed = schema.safeParse(await c.req.json().catch(() => null));
+        if (!parsed.success)
+          return c.json({ error: "invalid_local_request" }, 422);
+        action = parsed.data;
+      }
+      return c.env.CONFIRMATIONS.get(
+        c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
+      ).fetch(
+        new Request("https://internal/native", {
+          method: "POST",
+          body: JSON.stringify({ userId: auth.userId, operation, action }),
+        }),
+      );
+    });
   app.get("/api/jarvis/capabilities", async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env);
     if (!auth) return c.json({ error: "unauthorized" }, 401);

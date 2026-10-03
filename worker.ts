@@ -93,6 +93,9 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   LLM_MODE?: string;
   GROQ_MODEL?: string;
   GROQ_API_KEY?: string;
+  HOME_ASSISTANT_URL?: string;
+  HOME_ASSISTANT_TOKEN?: string;
+  HOME_ASSISTANT_ALLOWED_DEVICES?: string;
   ROKU_TV_IP?: string;
   ROKU_ALLOWED_APPS?: string;
   FISH_AUDIO_API_KEY?: string;
