@@ -88,6 +88,8 @@ export class AppJobRoom extends JobRoom<Env> {
 }
 
 export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
+  OPENWEATHER_API_KEY?: string;
+  APPLE_MUSIC_DEVELOPER_TOKEN?: string;
   LLM_MODE?: string;
   GROQ_MODEL?: string;
   GROQ_API_KEY?: string;

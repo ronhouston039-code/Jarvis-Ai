@@ -1,3 +1,4 @@
+import { WeatherSummary } from "./WeatherConnect";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useQuery } from "deepspace";
 import { Link } from "react-router-dom";
@@ -119,11 +120,18 @@ export function JarvisHud(p: Props) {
         scale < 1 ? `${canvas.offsetHeight * scale}px` : "auto";
       frame.style.overflowX = scale < 1 ? "hidden" : "auto";
     };
-    const observer = new ResizeObserver(update);
+    let resizeFrame = 0;
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(update);
+    });
     observer.observe(frame);
     observer.observe(canvas);
     update();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(resizeFrame);
+    };
   }, [expanded]);
   return (
     <>
@@ -147,10 +155,7 @@ export function JarvisHud(p: Props) {
             <ClockPanel />
             <Link to="/connections?tab=live" className="hud-weather hud-panel">
               <CloudSun size={33} />
-              <div>
-                <strong>WEATHER</strong>
-                <span>Tap for live weather</span>
-              </div>
+              <WeatherSummary />
             </Link>
             <div className="hud-brand">
               <h1>JARVIS</h1>

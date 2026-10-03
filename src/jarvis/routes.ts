@@ -1,3 +1,4 @@
+import { weatherSnapshot, weatherCoordinatesQuery } from "./weather";
 import { registerConnectionRoutes } from "./connection-routes";
 import { startupAudio } from "./startup-audio";
 import { usesOwnerGroq } from "../ai/groq";
@@ -73,6 +74,45 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       onError: (c) => c.json({ error: "request_too_large" }, 413),
     }),
   );
+  app.get("/api/weather", async (c) => {
+    const auth = await resolveAuth(c.req.raw, c.env);
+    if (!auth) return c.json({ error: "unauthorized" }, 401);
+    const membership = await resolveAppMembership(
+      c.env,
+      auth.userId,
+      c.req.raw.signal,
+    );
+    if (!membership?.member) return c.json({ error: "forbidden" }, 403);
+    const parsed = weatherCoordinatesQuery.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: "invalid_coordinates" }, 400);
+    const stub = c.env.CONFIRMATIONS.get(
+      c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
+    );
+    const quota = await stub.fetch(
+      new Request("https://internal/rate", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: auth.userId,
+          operation: "rate",
+          bucket: "actions",
+          limit: 30,
+        }),
+      }),
+    );
+    if (!quota.ok) return quota;
+    try {
+      return c.json(
+        await weatherSnapshot(
+          parsed.data.lat,
+          parsed.data.lon,
+          "Current location",
+          c.env.OPENWEATHER_API_KEY,
+        ),
+      );
+    } catch {
+      return c.json({ error: "weather_unavailable" }, 502);
+    }
+  });
   app.post("/api/jarvis/preferences", async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env);
     if (!auth) return c.json({ error: "unauthorized" }, 401);

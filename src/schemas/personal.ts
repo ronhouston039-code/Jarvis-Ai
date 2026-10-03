@@ -28,6 +28,26 @@ const userColumn = {
 };
 export const personalSchemas: CollectionSchema[] = [
   {
+    name: "music-links",
+    ownerField: "userId",
+    uniqueOn: ["userId", "preset"],
+    columns: [
+      userColumn,
+      ...["preset", "label", "url"].map((name) => ({
+        name,
+        storage: "text" as const,
+        interpretation: "plain",
+      })),
+      {
+        name: "enabled",
+        storage: "number",
+        interpretation: "plain",
+        default: 1,
+      },
+    ],
+    permissions: own(true, ["preset", "label", "url", "enabled"]),
+  },
+  {
     name: "locations",
     ownerField: "userId",
     uniqueOn: ["userId"],

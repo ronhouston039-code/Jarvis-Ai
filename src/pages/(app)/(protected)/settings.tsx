@@ -1,3 +1,4 @@
+import { disconnectAppleMusic } from "../../../components/apple-music";
 import { signOut, useUser } from "deepspace";
 import { JarvisPreferences } from "../../../components/JarvisPreferences";
 import { Button } from "../../../components/ui";
@@ -13,7 +14,13 @@ export default function SettingsPage() {
           <p>{user?.name}</p>
           <p className="muted text-sm">{user?.email}</p>
         </div>
-        <Button variant="outline" onClick={() => signOut()}>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            await disconnectAppleMusic();
+            await signOut();
+          }}
+        >
           Sign out
         </Button>
       </section>

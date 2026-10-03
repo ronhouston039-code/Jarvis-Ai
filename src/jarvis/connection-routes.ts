@@ -1,3 +1,6 @@
+import { musicLinkInput } from "./music-links";
+import { weatherSnapshot, findCities } from "./weather";
+import { usableAppleMusicToken } from "./apple-music-config";
 import type { Hono } from "hono";
 import { createUserToolExecutor, resolveAppMembership } from "deepspace/worker";
 import type { AppContext } from "../../worker";
@@ -22,9 +25,24 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
     if (!membership?.member) return c.json({ error: "forbidden" }, 403);
     return next();
   });
+  app.get("/api/jarvis/connections/apple-music/config", async (c) => {
+    const auth = (await resolveAuth(c.req.raw, c.env))!;
+    if (auth.userId !== c.env.OWNER_USER_ID)
+      return c.json({ available: false, reason: "owner_music_only" });
+    // This short-lived MusicKit developer JWT is intentionally consumed by Apple's browser SDK.
+    // The Apple signing private key must never be placed in this response or in the frontend.
+    const token = c.env.APPLE_MUSIC_DEVELOPER_TOKEN;
+    c.header("Cache-Control", "no-store");
+    return c.json(
+      usableAppleMusicToken(token)
+        ? { available: true, developerToken: token }
+        : { available: false, reason: "music_developer_token_required" },
+    );
+  });
   for (const [path, collection, schema] of [
     ["location", "locations", locationInput],
     ["devices", "device-shortcuts", shortcutInput],
+    ["music-links", "music-links", musicLinkInput],
   ] as const) {
     app.post(`/api/jarvis/connections/${path}`, async (c) => {
       const auth = (await resolveAuth(c.req.raw, c.env))!;
@@ -36,10 +54,15 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
         c.req.raw.signal,
       );
       const found =
-        path === "location"
+        path === "location" || path === "music-links"
           ? ((await execute("records.query", {
               collection,
-              where: { userId: auth.userId },
+              where: {
+                userId: auth.userId,
+                ...("preset" in parsed.data
+                  ? { preset: parsed.data.preset }
+                  : {}),
+              },
               limit: 1,
             })) as { data?: { records?: { recordId: string }[] } })
           : null;
@@ -58,7 +81,7 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
   app.post("/api/jarvis/connections/disable", async (c) => {
     const parsed = z
       .object({
-        collection: z.enum(["locations", "device-shortcuts"]),
+        collection: z.enum(["locations", "device-shortcuts", "music-links"]),
         recordId: z.string().min(1).max(200),
       })
       .strict()
@@ -84,9 +107,20 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
       data:
         parsed.data.collection === "locations"
           ? { enabled: 0, label: "", latitude: 0, longitude: 0 }
-          : { enabled: 0, name: "", onShortcut: "", offShortcut: "" },
+          : parsed.data.collection === "music-links"
+            ? { enabled: 0, label: "", url: "" }
+            : { enabled: 0, name: "", onShortcut: "", offShortcut: "" },
     })) as { success: boolean };
     return c.json(result, result.success ? 200 : 403);
+  });
+  app.get("/api/jarvis/connections/cities", async (c) => {
+    const query = z.string().trim().min(2).max(120).safeParse(c.req.query("q"));
+    if (!query.success) return c.json({ error: "invalid_query" }, 422);
+    try {
+      return c.json(await findCities(query.data));
+    } catch {
+      return c.json({ error: "city_search_unavailable" }, 502);
+    }
   });
   app.get("/api/jarvis/connections/weather", async (c) => {
     const auth = (await resolveAuth(c.req.raw, c.env))!;
@@ -101,7 +135,8 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
       limit: 1,
     })) as { success: boolean; data?: { records?: { data: unknown }[] } };
     const data = found.data?.records?.[0]?.data as
-      Record<string, unknown> | undefined;
+      | Record<string, unknown>
+      | undefined;
     const location = locationInput.safeParse(
       data
         ? {
@@ -115,7 +150,12 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
     if (!location.success) return c.json({ error: "location_required" }, 409);
     try {
       return c.json(
-        await currentWeather(location.data.latitude, location.data.longitude),
+        await weatherSnapshot(
+          location.data.latitude,
+          location.data.longitude,
+          location.data.label,
+          c.env.OPENWEATHER_API_KEY,
+        ),
       );
     } catch {
       return c.json({ error: "weather_unavailable" }, 502);

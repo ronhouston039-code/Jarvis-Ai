@@ -1,3 +1,6 @@
+import { MusicPlaylistLinks } from "./MusicPlaylistLinks";
+import { WeatherConnect } from "./WeatherConnect";
+import { AppleMusicConnect } from "./AppleMusicConnect";
 import { useEffect, useState } from "react";
 import { useQuery } from "deepspace";
 import { useSearchParams } from "react-router-dom";
@@ -21,6 +24,11 @@ type Location = {
 type LiveData = {
   source?: string;
   retrievedAt?: string;
+  temperature?: number;
+  feelsLike?: number;
+  description?: string;
+  high?: number | null;
+  low?: number | null;
   current?: {
     temperature_2m?: number;
     apparent_temperature?: number;
@@ -55,6 +63,19 @@ function LiveResults({ data }: { data: LiveData }) {
         Retrieved{" "}
         {data.retrievedAt ? new Date(data.retrievedAt).toLocaleString() : "now"}
       </p>
+      {typeof data.temperature === "number" && (
+        <>
+          <h3>{data.temperature}°F</h3>
+          <p>
+            {data.description} · Feels like {data.feelsLike}°F
+          </p>
+          {typeof data.high === "number" && typeof data.low === "number" && (
+            <p>
+              High {data.high}° · Low {data.low}°
+            </p>
+          )}
+        </>
+      )}
       {data.current && (
         <>
           <h3>{temperature(data.current.temperature_2m)}</h3>
@@ -187,8 +208,8 @@ export function JarvisConnections() {
     setStatus("Requesting a one-time location…");
     navigator.geolocation?.getCurrentPosition(
       (p) => {
-        setLatitude(String(Number(p.coords.latitude.toFixed(4))));
-        setLongitude(String(Number(p.coords.longitude.toFixed(4))));
+        setLatitude(String(Number(p.coords.latitude.toFixed(2))));
+        setLongitude(String(Number(p.coords.longitude.toFixed(2))));
         setLabel(label || "My location");
         setStatus(
           "Location filled. Tap Save location to store it. No continuous tracking.",
@@ -198,7 +219,7 @@ export function JarvisConnections() {
         setStatus(
           "Location access unavailable. Enter your coordinates manually.",
         ),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 15 * 60 * 1000 },
     );
     if (!navigator.geolocation)
       setStatus("GPS is unavailable. Enter your location manually.");
@@ -303,6 +324,7 @@ export function JarvisConnections() {
           </div>
         </>
       )}
+      {tab === "location" && <WeatherConnect />}
       {tab === "location" && (
         <>
           <h2>Your location</h2>
@@ -384,10 +406,13 @@ export function JarvisConnections() {
           </form>
         </>
       )}
+      {tab === "music" && <><AppleMusicConnect /><MusicPlaylistLinks /></>}
       {(tab === "home" || tab === "music") && (
         <>
           <h2>
-            {tab === "music" ? "Apple Music" : "Apple Home & smart devices"}
+            {tab === "music"
+              ? "Apple Music shortcuts (optional)"
+              : "Apple Home & smart devices"}
           </h2>
           <p>
             {tab === "music"
@@ -468,6 +493,7 @@ export function JarvisConnections() {
           </form>
         </>
       )}
+      {tab === "live" && <WeatherConnect />}
       {tab === "live" && (
         <>
           <h2>Live information online</h2>

@@ -140,3 +140,50 @@ spoken once. Loading old history or navigating Home/Chat does not replay replies
 Turn voice off or use Stop speaking to cancel. Voice activation is per mounted
 session; no background speech or microphone capture is enabled. Speech errors
 show a safe message; check media volume and retry Listen if Safari blocks playback.
+
+### Direct Apple Music (MusicKit v3)
+
+The Apple Music screen loads Apple's official script only when an authenticated
+owner has configured `APPLE_MUSIC_DEVELOPER_TOKEN`. Obtain an Apple Developer
+membership, enable MusicKit for a media identifier, create its key, and generate
+an ES256 Apple Music developer JWT with your Team ID, Key ID and signing key.
+See https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens.
+Store the generated token in the DeepSpace encrypted secrets store and redeploy.
+Never upload the `.p8` signing private key to the interface. MusicKit requires
+its developer JWT in the browser; the owner-only no-store configuration route
+exposes that public-purpose token only, and rejects expired or malformed values.
+
+Flow: Connect Apple Music → app permission explanation → Continue with Apple
+Music → Apple's authorization → Connected to Apple Music. This is MusicKit
+music authorization, not Sign in with Apple identity. Apple does not provide an
+Apple ID account display name. The music user token stays with MusicKit in the
+browser; no server token-save endpoint or background music access is enabled.
+Logout in Settings also attempts to disconnect MusicKit.
+
+Listening context is opt-in and stays in the browser, not the LLM. Search,
+Play, Pause, Previous and Next call MusicKit; availability depends on the real
+queue and subscription. New playlist opens an exact-name review with 0 songs;
+Cancel sends nothing, Create playlist submits exactly one library request, and
+unconfirmed writes are not retried automatically. No playlist is created by the
+assistant tool loop. These flows are tested with a mock MusicKit boundary;
+real Apple authorization/playback require the still-missing developer token.
+
+Focus/Workout/Relax shortcuts can instead open real Apple Music playlist share
+URLs without MusicKit. Placeholder IDs are rejected; connections are private and
+editable. Opening Apple's website never marks JARVIS connected or claims playback.
+
+### Weather permission and live cards
+
+Weather offers Use current location / Enter a city instead / Not now. GPS is
+requested only on the explicit button, uses low-accuracy mode with a 10-second
+timeout and up to 15-minute cache, and rounds coordinates to two decimal places.
+Current-location requests are temporary and not automatically persisted. Selecting
+a city explicitly saves it privately. Disconnect clears the saved weather location.
+
+`GET /api/weather?lat=...&lon=...` requires a JARVIS bearer token, membership,
+validated coordinate ranges and quota. It returns normalized Fahrenheit conditions
+and forecasts. Open-Meteo is available without a credential. Optionally configure
+`OPENWEATHER_API_KEY` server-side for OpenWeather current conditions, retaining
+Open-Meteo forecast data. Provider failures never expose API keys or raw error bodies.
+`GET /api/jarvis/connections/cities?q=...` performs bounded Open-Meteo geocoding.
+Displayed temperatures, track names and connection statuses are not hardcoded demos.

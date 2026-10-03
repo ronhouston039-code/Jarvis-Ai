@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {validApplePlaylistUrl,musicLinkInput} from './music-links';
+it('rejects placeholders, external hosts, credential URLs and script links',()=>{for(const url of ['https://music.apple.com/us/playlist/your-playlist-id','https://music.apple.com.evil.example/playlist/pl.test','javascript:alert(1)','http://music.apple.com/playlist/pl.test','https://user:password@music.apple.com/playlist/pl.test'])expect(validApplePlaylistUrl(url)).toBe(false)});
+it('accepts a real Apple share-link format and fixed presets',()=>{expect(validApplePlaylistUrl('https://music.apple.com/us/playlist/focus/pl.123456789abc')).toBe(true);expect(musicLinkInput.safeParse({preset:'arbitrary',label:'Focus',url:'https://music.apple.com/us/playlist/focus/pl.123456789abc'}).success).toBe(false)});
