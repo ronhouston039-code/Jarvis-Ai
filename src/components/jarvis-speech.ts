@@ -22,6 +22,7 @@ export class JarvisSpeechPlayer {
   constructor(
     private state: (speaking: boolean) => void,
     private notice: (message: string) => void,
+    private audioChanged: (audio: HTMLAudioElement | null) => void = () => {},
   ) {}
   stop() {
     this.generation++;
@@ -32,10 +33,14 @@ export class JarvisSpeechPlayer {
       this.audio.pause();
     }
     this.audio = undefined;
+    this.audioChanged(null);
     if (this.url) URL.revokeObjectURL(this.url);
     this.url = undefined;
     window.speechSynthesis?.cancel();
     this.state(false);
+  }
+  currentAudio() {
+    return this.audio ?? null;
   }
   greet(speed: VoiceSpeed = "normal") {
     return this.speak(
@@ -60,6 +65,7 @@ export class JarvisSpeechPlayer {
     const fallback = () => {
       if (id !== this.generation || fallbackStarted) return;
       fallbackStarted = true;
+      this.audioChanged(null);
       if (!window.speechSynthesis) {
         this.notice("Speech is unavailable. You can still read the reply.");
         return;
@@ -101,6 +107,7 @@ export class JarvisSpeechPlayer {
       this.url = URL.createObjectURL(blob);
       const audio = new Audio(this.url);
       this.audio = audio;
+      this.audioChanged(audio);
       audio.playbackRate = voiceRates[speed];
       let failed = false;
       const fail = () => {
@@ -114,6 +121,7 @@ export class JarvisSpeechPlayer {
       audio.onended = () => {
         if (id === this.generation) {
           this.state(false);
+          this.audioChanged(null);
           if (this.url) URL.revokeObjectURL(this.url);
           this.url = undefined;
         }

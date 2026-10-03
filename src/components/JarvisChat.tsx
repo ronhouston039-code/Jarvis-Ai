@@ -1,5 +1,11 @@
+import { JarvisFocus } from "./JarvisFocus";
+import { FocusAudioMeter } from "./focus-audio";
 import { isGreetingRequest } from "../jarvis/greeting";
-import { JarvisSpeechPlayer, type VoiceSpeed } from "./jarvis-speech";
+import {
+  JarvisSpeechPlayer,
+  spokenVersion,
+  type VoiceSpeed,
+} from "./jarvis-speech";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, listDeepSpaceAgentModels } from "deepspace";
 import {
@@ -10,7 +16,7 @@ import {
   Plus,
   MessageSquare,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { Button, Textarea } from "./ui";
 import { useStreamingChat } from "./ChatPanel.stream";
@@ -30,7 +36,11 @@ type Recognition = {
   start: () => void;
   stop: () => void;
   onresult:
-    | ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void)
+    | ((e: {
+        results: ArrayLike<
+          ArrayLike<{ transcript: string }> & { isFinal?: boolean }
+        >;
+      }) => void)
     | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
@@ -42,6 +52,13 @@ type SpeechWindow = Window & {
 const models = listDeepSpaceAgentModels("application");
 const model = (models.find((m) => m.id === "gpt-6-luna") ?? models[0])?.id;
 export function JarvisChat({ userId }: { userId: string }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusMode = searchParams.get("mode") === "focus";
+  const focusRef = useRef(focusMode);
+  const meter = useRef<FocusAudioMeter | null>(null);
+  if (!meter.current) meter.current = new FocusAudioMeter();
+  const [transcript, setTranscript] = useState("");
+  const [spokenCaption, setSpokenCaption] = useState("");
   const [chatId, setChatId] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [draft, setDraft] = useState("");
@@ -62,7 +79,13 @@ export function JarvisChat({ userId }: { userId: string }) {
   });
   const speaker = useRef<JarvisSpeechPlayer | null>(null);
   if (!speaker.current)
-    speaker.current = new JarvisSpeechPlayer(setSpeaking, setVoiceError);
+    speaker.current = new JarvisSpeechPlayer(
+      setSpeaking,
+      setVoiceError,
+      (audio) => {
+        if (focusRef.current) meter.current?.attachSpeech(audio);
+      },
+    );
   const pendingSpeech = useRef<{
     previousIds: Set<string>;
     started: boolean;
@@ -105,6 +128,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     } catch {
       /* Playback still works without storage. */
     }
+    setSpokenCaption("Playing your saved greeting.");
     await speaker.current?.greet(speed);
   }, [userId]);
   useEffect(() => {
@@ -132,6 +156,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     };
   }, [voiceEnabled, capabilities?.fishVoice, userId, playGreeting]);
   function speak(text: string) {
+    setSpokenCaption(spokenVersion(text));
     let speed: VoiceSpeed = "normal";
     try {
       const saved = sessionStorage.getItem(`jarvis-voice-speed:${userId}`);
@@ -182,7 +207,7 @@ export function JarvisChat({ userId }: { userId: string }) {
   ];
   useEffect(() => {
     const pending = pendingSpeech.current;
-    if (!pending || !voiceEnabled) return;
+    if (!pending || !(voiceEnabled || focusMode)) return;
     try {
       if (sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === "off") {
         pendingSpeech.current = null;
@@ -212,7 +237,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       pendingSpeech.current = null;
       speak(reply.content);
     }
-  }, [isLoading, error, records, inFlight, voiceEnabled]);
+  }, [isLoading, error, records, inFlight, voiceEnabled, focusMode]);
   function toggleVoice() {
     if (voiceEnabled) {
       pendingSpeech.current = null;
@@ -247,20 +272,27 @@ export function JarvisChat({ userId }: { userId: string }) {
   useEffect(() => {
     const end = () => {
       speech.current?.stop();
+      meter.current?.stopMicrophone();
+      setListening(false);
       speaker.current?.stop();
     };
     document.addEventListener("visibilitychange", end);
     return () => {
       end();
       speaker.current?.stop();
+      meter.current?.close();
       document.removeEventListener("visibilitychange", end);
     };
   }, []);
-  function dictate() {
+  async function dictate() {
     if (listening) {
       speech.current?.stop();
+      meter.current?.stopMicrophone();
+      setListening(false);
       return;
     }
+    pendingSpeech.current = null;
+    if (isLoading) stop();
     speaker.current?.stop();
     setSpeaking(false);
     const Constructor =
@@ -268,7 +300,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       (window as SpeechWindow).webkitSpeechRecognition;
     if (!Constructor) {
       setVoiceError(
-        "Voice dictation is unavailable in this browser. Use the microphone on your iPhone keyboard.",
+        "Voice dictation is unavailable in this browser. Use the keyboard instead.",
       );
       return;
     }
@@ -276,58 +308,201 @@ export function JarvisChat({ userId }: { userId: string }) {
     speech.current = recognition;
     recognition.lang = navigator.language;
     recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = (e) => {
-      const transcript = Array.from(e.results)
-        .map((r) => r[0].transcript)
-        .join(" ");
-      if (isGreetingRequest(transcript)) {
+    recognition.interimResults = focusRef.current;
+    recognition.onresult = (event) => {
+      if (speech.current !== recognition) return;
+      const results = Array.from(event.results);
+      const text = results.map((result) => result[0].transcript).join(" ");
+      const final = results.every((result) => result.isFinal !== false);
+      setTranscript(text);
+      if (!final) return;
+      if (isGreetingRequest(text)) {
         recognition.stop();
+        meter.current?.stopMicrophone();
         void playGreeting();
-      } else setDraft(transcript);
+      } else if (focusRef.current) {
+        recognition.stop();
+        meter.current?.stopMicrophone();
+        sendLatest.current(text);
+      } else setDraft(text);
     };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = (e) => {
+    recognition.onend = () => {
+      if (speech.current !== recognition) return;
       setListening(false);
+      meter.current?.stopMicrophone();
+    };
+    recognition.onerror = (event) => {
+      if (speech.current !== recognition) return;
+      setListening(false);
+      meter.current?.stopMicrophone();
       setVoiceError(
-        e.error === "not-allowed"
-          ? "Allow microphone access in Safari settings to use voice."
+        event.error === "not-allowed"
+          ? "Microphone permission was denied. Enable it in browser settings or use the keyboard."
           : "Voice input stopped. Please try again or type your message.",
       );
     };
     setVoiceError("");
+    setTranscript("");
+    // Flag permission setup immediately so a second tap can cancel it.
+    setListening(true);
     try {
+      if (focusRef.current && !(await meter.current?.startMicrophone())) {
+        setListening(false);
+        return;
+      }
+      if (speech.current !== recognition || (focusMode && !focusRef.current)) {
+        meter.current?.stopMicrophone();
+        setListening(false);
+        return;
+      }
       recognition.start();
-      setListening(true);
     } catch {
-      setVoiceError("Could not start your microphone. Please try again.");
+      meter.current?.stopMicrophone();
+      setListening(false);
+      setVoiceError(
+        "Could not start your microphone. Check permission and try again, or use the keyboard.",
+      );
     }
   }
-  function submit() {
-    if (!draft.trim() || isLoading) return;
-    if (isGreetingRequest(draft)) {
-      speech.current?.stop();
+  function sendMessage(text: string) {
+    if (!text.trim() || isLoading) return;
+    speech.current?.stop();
+    meter.current?.stopMicrophone();
+    speaker.current?.stop();
+    setListening(false);
+    if (isGreetingRequest(text)) {
       setDraft("");
       void playGreeting();
       return;
     }
-    speech.current?.stop();
+    setTranscript(text.trim());
     setShowChat(true);
-    pendingSpeech.current = voiceEnabled
-      ? {
-          previousIds: new Set(messages.map((message) => message.id)),
-          started: false,
-        }
-      : null;
-    void send(draft.trim());
+    pendingSpeech.current =
+      voiceEnabled || focusRef.current
+        ? {
+            previousIds: new Set(messages.map((message) => message.id)),
+            started: false,
+          }
+        : null;
+    void send(text.trim());
     setDraft("");
+  }
+  const sendLatest = useRef(sendMessage);
+  useEffect(() => {
+    sendLatest.current = sendMessage;
+  });
+  function submit() {
+    sendMessage(draft);
+  }
+  const enableFocusAudio = useCallback(async () => {
+    try {
+      await meter.current?.enable();
+      if (focusRef.current)
+        meter.current?.attachSpeech(speaker.current?.currentAudio() ?? null);
+    } catch {
+      setVoiceError(
+        "Audio visualization is unavailable in this browser. Voice and keyboard controls remain available.",
+      );
+    }
+  }, []);
+  const exitFocus = useCallback(() => {
+    focusRef.current = false;
+    pendingSpeech.current = null;
+    speech.current?.stop();
+    speaker.current?.stop();
+    meter.current?.close();
+    setListening(false);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete("mode");
+      return next;
+    });
+  }, [setSearchParams]);
+  function enterFocus() {
+    focusRef.current = true;
+    speech.current?.stop();
+    setListening(false);
+    setVoiceEnabled(true);
+    try {
+      sessionStorage.setItem(`jarvis-voice-feedback:${userId}`, "on");
+    } catch {
+      /* Session still works without storage. */
+    }
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("mode", "focus");
+      return next;
+    });
+    void enableFocusAudio();
+  }
+  useEffect(() => {
+    focusRef.current = focusMode;
+    if (!focusMode) {
+      meter.current?.stopMicrophone();
+      return;
+    }
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      speech.current?.stop();
+      speech.current = null;
+      speaker.current?.stop();
+      pendingSpeech.current = null;
+      meter.current?.close();
+      setListening(false);
+    };
+  }, [focusMode]);
+  if (focusMode) {
+    const state = speaking
+      ? "speaking"
+      : listening
+        ? "listening"
+        : isLoading
+          ? "thinking"
+          : "idle";
+    const lastReply = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant")?.content;
+    return (
+      <JarvisFocus
+        state={state}
+        meter={meter.current}
+        caption={
+          speaking
+            ? spokenCaption
+            : listening
+              ? transcript
+              : isLoading
+                ? lastReply || "Working on your request…"
+                : lastReply || transcript
+        }
+        draft={draft}
+        error={
+          voiceError ||
+          (error ? "Could not complete your request. Please try again." : "")
+        }
+        onDraft={setDraft}
+        onSend={submit}
+        onMic={() => void dictate()}
+        onExit={exitFocus}
+        onStop={stopResponse}
+        onKeyboard={() => {
+          speech.current?.stop();
+          meter.current?.stopMicrophone();
+          setListening(false);
+          void enableFocusAudio();
+        }}
+      />
+    );
   }
   return (
     <JarvisHud
       speaking={speaking}
       listening={listening}
       busy={isLoading}
-      onVoice={dictate}
+      onVoice={() => void dictate()}
+      onFocus={enterFocus}
       provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
       showChat={showChat}
       onHome={() => setShowChat(false)}

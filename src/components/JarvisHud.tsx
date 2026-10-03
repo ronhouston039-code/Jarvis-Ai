@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useQuery } from "deepspace";
 import { Link } from "react-router-dom";
 import {
+  Maximize2,
   Home,
   MessageSquare,
   LayoutGrid,
@@ -30,6 +31,7 @@ type Props = {
   onChat: () => void;
   onVoice: () => void;
   onHome: () => void;
+  onFocus: () => void;
   onPrompt: (prompt: string) => void;
   history: ReactNode;
   conversation: ReactNode;
@@ -180,6 +182,14 @@ export function JarvisHud(p: Props) {
                 <LayoutGrid />
                 Apps
               </Link>
+              <button
+                onClick={p.onFocus}
+                data-greeting-skip
+                aria-label="Open Jarvis Focus Mode"
+              >
+                <Maximize2 />
+                Focus
+              </button>
               <Link to="/settings">
                 <Settings />
                 SETTINGS
