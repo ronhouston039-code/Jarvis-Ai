@@ -15,8 +15,11 @@ export function MusicPlaylistLinks() {
     where: { enabled: 1 },
   });
   const [preset, setPreset] = useState("focus");
-  const [label, setLabel] = useState("");
-  const [url, setUrl] = useState("");
+  const [label, setLabel] = useState(() => new URLSearchParams(window.location.search).get("playlistName")?.slice(0, 100) ?? "");
+  const [url, setUrl] = useState(() => {
+    const shared = new URLSearchParams(window.location.search).get("playlistUrl") ?? "";
+    return validApplePlaylistUrl(shared) ? shared : "";
+  });
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   async function save() {
@@ -64,9 +67,11 @@ export function MusicPlaylistLinks() {
   return (
     <section className="personal-card">
       <div style={{ width: "100%" }}>
-        <h2>Music shortcuts</h2>
+        <h2>MUSIC</h2>
+        <p>Your preferred service<br /><strong>Apple Music</strong></p>
+        <h3>Quick play</h3>
         <p>
-          Focus, Workout and Relax open your chosen Apple Music playlists. Add
+          “Jarvis, play my focus playlist” — opens Apple Music. Add
           real share links from Apple Music. Opening a link does not grant
           JARVIS library access or confirm playback.
         </p>
@@ -92,7 +97,7 @@ export function MusicPlaylistLinks() {
                 }}
               >
                 {p[0].toUpperCase() + p.slice(1)}
-                {link ? "" : " · Set up"}
+                
               </Button>
             );
           })}
