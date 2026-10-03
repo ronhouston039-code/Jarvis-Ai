@@ -63,11 +63,12 @@ export function FocusOrb({
         0,
         cx,
         cy,
-        radius * 1.65,
+        radius * 1.8,
       );
-      bloom.addColorStop(0, "rgba(255,255,255,.2)");
-      bloom.addColorStop(0.22, "rgba(0,210,255,.16)");
-      bloom.addColorStop(0.6, "rgba(0,119,254,.09)");
+      const intensity = 0.75 + level * 0.25;
+      bloom.addColorStop(0, `rgba(255,255,255,${0.95 * intensity})`);
+      bloom.addColorStop(0.3, `rgba(0,210,255,${0.8 * intensity})`);
+      bloom.addColorStop(0.7, `rgba(0,100,255,${0.2 * intensity})`);
       bloom.addColorStop(1, "rgba(0,119,254,0)");
       context.fillStyle = bloom;
       context.fillRect(0, 0, width, height);
