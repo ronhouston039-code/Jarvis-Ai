@@ -37,6 +37,7 @@ export default function PersonalPage() {
   }>("notifications", { where, orderBy: "createdAt", orderDir: "desc" });
   const { records: chats } = useQuery<{ title: string }>("ai-chats", { where });
   const [memory, setMemory] = useState("");
+  const [showPreferenceOffer, setShowPreferenceOffer] = useState(true);
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
   const [error, setError] = useState("");
@@ -134,6 +135,21 @@ export default function PersonalPage() {
         </div>
       ))}
       <h2>Memory</h2>
+      {showPreferenceOffer && !memories.some((m) => m.data.content === "Prefers concise briefings and Fahrenheit.") && (
+        <section className="personal-card" aria-label="Remember preferences">
+          <div>
+            <p>Concise briefings and Fahrenheit — would you like me to remember that preference?</p>
+            <div className="connection-actions">
+              <Button variant="outline" disabled={busy} onClick={() => setShowPreferenceOffer(false)}>Not now</Button>
+              <Button disabled={busy} onClick={() => void run(async () => {
+                await api("memories", { content: "Prefers concise briefings and Fahrenheit.", category: "preference" });
+                setShowPreferenceOffer(false);
+              })}>Remember</Button>
+            </div>
+            <small>Saved only after you tap Remember. You can delete it below.</small>
+          </div>
+        </section>
+      )}
       <p className="muted mb-4 text-sm">
         JARVIS remembers preferences only when you ask. Conversation history is
         stored separately.
