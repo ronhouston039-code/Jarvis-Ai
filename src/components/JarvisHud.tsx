@@ -26,6 +26,7 @@ import { JarvisOrb } from "./JarvisOrb";
 
 type Props = {
   provider: string;
+  speaking?: boolean;
   listening: boolean;
   busy: boolean;
   showChat: boolean;
@@ -308,7 +309,7 @@ export function JarvisHud(p: Props) {
                 <div className="hud-conversation">{p.conversation}</div>
               ) : (
                 <div className="hud-hologram">
-                  <JarvisOrb active={p.listening || p.busy} />
+                  <JarvisOrb active={p.listening || p.busy || p.speaking} />
                   <div className="hologram-caption">
                     <span>J.A.R.V.I.S.</span>
                     <p>Ready when you are.</p>

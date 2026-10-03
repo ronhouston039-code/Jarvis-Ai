@@ -35,7 +35,12 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       onError: (c) => c.json({ error: "request_too_large" }, 413),
     }),
   );
-  for (const prefix of ["/api/ai/*", "/api/jarvis/*", "/_deepspace/agent/*"])
+  for (const prefix of [
+    "/api/ai/*",
+    "/api/jarvis/*",
+    "/api/tts",
+    "/_deepspace/agent/*",
+  ])
     app.use(prefix, async (c, next) => {
       if (
         c.req.method !== "POST" &&
@@ -49,7 +54,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
           : resolveAuth
       )(c.req.raw, c.env);
       if (!auth) return c.json({ error: "unauthorized" }, 401);
-      const voice = c.req.path.includes("/voice/");
+      const voice = c.req.path.includes("/voice/") || c.req.path === "/api/tts";
       const stub = c.env.CONFIRMATIONS.get(
         c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
       );
@@ -130,11 +135,29 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
             }
           }),
         responseMode: z.enum(["normal", "brief", "technical"]),
-        proactive: z.string().max(1000).refine((value) => {
-          try {
-            return z.object({ dailyBriefing: z.boolean(), calendarAlerts: z.boolean(), weatherAlerts: z.boolean(), focusBlocks: z.enum(["ask", "off"]), emailReminders: z.boolean(), marketing: z.boolean(), quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) }).strict().safeParse(JSON.parse(value)).success;
-          } catch { return false; }
-        }).optional(),
+        proactive: z
+          .string()
+          .max(1000)
+          .refine((value) => {
+            try {
+              return z
+                .object({
+                  dailyBriefing: z.boolean(),
+                  calendarAlerts: z.boolean(),
+                  weatherAlerts: z.boolean(),
+                  focusBlocks: z.enum(["ask", "off"]),
+                  emailReminders: z.boolean(),
+                  marketing: z.boolean(),
+                  quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                  quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                })
+                .strict()
+                .safeParse(JSON.parse(value)).success;
+            } catch {
+              return false;
+            }
+          })
+          .optional(),
       })
       .strict()
       .safeParse(await c.req.json().catch(() => null));
@@ -167,15 +190,13 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     return c.json({
       llmMode: usesOwnerGroq(c.env, auth.userId) ? "groq" : "deepspace",
       chat: !usesOwnerGroq(c.env, auth.userId) || !!c.env.GROQ_API_KEY,
-      voiceMode: "device",
+      voiceMode: "fish_with_device_fallback",
       reminders: true,
       memories: true,
       serverTranscription:
         !!c.env.GROQ_API_KEY && auth.userId === c.env.OWNER_USER_ID,
       fishVoice:
-        !!c.env.VOICE_API_KEY &&
-        !!c.env.VOICE_ID &&
-        auth.userId === c.env.OWNER_USER_ID,
+        !!c.env.FISH_AUDIO_API_KEY && auth.userId === c.env.OWNER_USER_ID,
       integrations: {
         weather: true,
         news: "BBC",
@@ -307,45 +328,56 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
     });
   });
-  app.post("/api/jarvis/voice/speak", async (c) => {
-    const auth = await resolveAuth(c.req.raw, c.env);
-    if (!auth) return c.json({ error: "unauthorized" }, 401);
-    if (auth.userId !== c.env.OWNER_USER_ID)
-      return c.json({ error: "owner_voice_only" }, 403);
-    if (!c.env.VOICE_API_KEY || !c.env.VOICE_ID)
-      return c.json({ error: "fish_voice_not_connected" }, 409);
-    const parsed = z
-      .object({ text: z.string().min(1).max(4000) })
-      .strict()
-      .safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
-    try {
-      const response = await fetch("https://api.fish.audio/v1/tts", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${c.env.VOICE_API_KEY}`,
-          "Content-Type": "application/json",
-          model: "s1",
-          "User-Agent": "JARVIS/1.0",
-        },
-        body: JSON.stringify({
-          text: parsed.data.text,
-          reference_id: c.env.VOICE_ID,
-          format: "mp3",
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
-      if (response.status === 402)
-        return c.json({ error: "speech_credits_required" }, 402);
-      if (response.status === 401 || response.status === 403)
-        return c.json({ error: "speech_access_denied" }, 502);
-      if (!response.ok) return c.json({ error: "speech_unavailable" }, 502);
-      return new Response(response.body, {
-        headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
-      });
-    } catch {
-      return c.json({ error: "speech_unavailable" }, 502);
-    }
-  });
+  app.use(
+    "/api/tts",
+    bodyLimit({
+      maxSize: 8000,
+      onError: (c) => c.json({ error: "request_too_large" }, 413),
+    }),
+  );
+  for (const path of ["/api/tts", "/api/jarvis/voice/speak"])
+    app.post(path, async (c) => {
+      const auth = await resolveAuth(c.req.raw, c.env);
+      if (!auth) return c.json({ error: "unauthorized" }, 401);
+      if (auth.userId !== c.env.OWNER_USER_ID)
+        return c.json({ error: "owner_voice_only" }, 403);
+      if (!c.env.FISH_AUDIO_API_KEY)
+        return c.json({ error: "fish_voice_not_connected" }, 409);
+      const parsed = z
+        .object({ text: z.string().trim().min(1).max(1000) })
+        .strict()
+        .safeParse(await c.req.json().catch(() => null));
+      if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
+      try {
+        const response = await fetch("https://api.fish.audio/v1/tts", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${c.env.FISH_AUDIO_API_KEY}`,
+            "Content-Type": "application/json",
+            model: "s1",
+            "User-Agent": "JARVIS/1.0",
+          },
+          body: JSON.stringify({
+            text: parsed.data.text,
+            reference_id: "612b878b113047d9a770c069c8b4fdfe",
+            format: "mp3",
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (response.status === 402)
+          return c.json({ error: "speech_credits_required" }, 402);
+        if (response.status === 401 || response.status === 403)
+          return c.json({ error: "speech_access_denied" }, 502);
+        if (!response.ok) return c.json({ error: "speech_unavailable" }, 502);
+        return new Response(response.body, {
+          headers: {
+            "Content-Type": "audio/mpeg",
+            "Cache-Control": "no-store",
+          },
+        });
+      } catch {
+        return c.json({ error: "speech_unavailable" }, 502);
+      }
+    });
   registerConnectionRoutes(app);
 }

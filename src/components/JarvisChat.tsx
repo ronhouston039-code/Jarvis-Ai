@@ -1,3 +1,4 @@
+import { JarvisSpeechPlayer, type VoiceSpeed } from "./jarvis-speech";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, listDeepSpaceAgentModels } from "deepspace";
 import {
@@ -52,8 +53,16 @@ export function JarvisChat({ userId }: { userId: string }) {
   } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    try {
+      return sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === "on";
+    } catch {
+      return false;
+    }
+  });
+  const speaker = useRef<JarvisSpeechPlayer | null>(null);
+  if (!speaker.current)
+    speaker.current = new JarvisSpeechPlayer(setSpeaking, setVoiceError);
   const pendingSpeech = useRef<{
     previousIds: Set<string>;
     started: boolean;
@@ -91,41 +100,17 @@ export function JarvisChat({ userId }: { userId: string }) {
       setSpeaking(false);
     }
   }
-  function deviceSpeak(text: string) {
-    if (!window.speechSynthesis) {
-      setVoiceError("Spoken replies are not available in this browser.");
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.volume = 1;
-    utterance.lang = navigator.language || "en-US";
-    utterance.onstart = () => {
-      if (utteranceRef.current === utterance) setSpeaking(true);
-    };
-    utterance.onend = () => {
-      if (utteranceRef.current !== utterance) return;
-      setSpeaking(false);
-      utteranceRef.current = null;
-    };
-    utterance.onerror = (event) => {
-      if (utteranceRef.current !== utterance) return;
-      setSpeaking(false);
-      utteranceRef.current = null;
-      if (event.error !== "interrupted" && event.error !== "canceled")
-        setVoiceError(
-          "Your device could not play speech. Tap Listen again and check your media volume.",
-        );
-    };
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }
   function speak(text: string) {
     playback.current?.pause();
-    setVoiceError("");
     setAudioUrl(null);
-    deviceSpeak(text);
+    let speed: VoiceSpeed = "normal";
+    try {
+      const saved = sessionStorage.getItem(`jarvis-voice-speed:${userId}`);
+      if (saved === "slow" || saved === "fast") speed = saved;
+    } catch {
+      /* Default speed is available without session storage. */
+    }
+    void speaker.current?.speak(text, speed);
   }
   const bottom = useRef<HTMLDivElement>(null);
   const where = useMemo(
@@ -169,6 +154,14 @@ export function JarvisChat({ userId }: { userId: string }) {
   useEffect(() => {
     const pending = pendingSpeech.current;
     if (!pending || !voiceEnabled) return;
+    try {
+      if (sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === "off") {
+        pendingSpeech.current = null;
+        return;
+      }
+    } catch {
+      /* Device speech remains available without session storage. */
+    }
     if (isLoading) {
       pending.started = true;
       return;
@@ -194,17 +187,27 @@ export function JarvisChat({ userId }: { userId: string }) {
   function toggleVoice() {
     if (voiceEnabled) {
       pendingSpeech.current = null;
-      window.speechSynthesis?.cancel();
+      speaker.current?.stop();
       setSpeaking(false);
+      try {
+        sessionStorage.setItem(`jarvis-voice-feedback:${userId}`, "off");
+      } catch {
+        /* Voice still stops without session storage. */
+      }
       setVoiceEnabled(false);
     } else {
+      try {
+        sessionStorage.setItem(`jarvis-voice-feedback:${userId}`, "on");
+      } catch {
+        /* Playback still works without session storage. */
+      }
       setVoiceEnabled(true);
       speak("Voice enabled. I’m ready.");
     }
   }
   function stopResponse() {
     pendingSpeech.current = null;
-    window.speechSynthesis?.cancel();
+    speaker.current?.stop();
     setSpeaking(false);
     stop();
   }
@@ -212,11 +215,15 @@ export function JarvisChat({ userId }: { userId: string }) {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [records, inFlight]);
   useEffect(() => {
-    const end = () => speech.current?.stop();
+    const end = () => {
+      speech.current?.stop();
+      speaker.current?.stop();
+      playback.current?.pause();
+    };
     document.addEventListener("visibilitychange", end);
     return () => {
       end();
-      window.speechSynthesis?.cancel();
+      speaker.current?.stop();
       document.removeEventListener("visibilitychange", end);
     };
   }, []);
@@ -225,7 +232,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       speech.current?.stop();
       return;
     }
-    window.speechSynthesis?.cancel();
+    speaker.current?.stop();
     playback.current?.pause();
     setSpeaking(false);
     const Constructor =
@@ -280,6 +287,7 @@ export function JarvisChat({ userId }: { userId: string }) {
   }
   return (
     <JarvisHud
+      speaking={speaking}
       listening={listening}
       busy={isLoading}
       onVoice={dictate}
@@ -457,11 +465,12 @@ export function JarvisChat({ userId }: { userId: string }) {
               <Volume2 size={16} />{" "}
               {voiceEnabled ? "Voice on · turn off" : "Voice off · turn on"}
             </button>
+            {speaking && <p role="status">Jarvis is speaking…</p>}
             {speaking && (
               <button
                 className="read-aloud"
                 onClick={() => {
-                  window.speechSynthesis?.cancel();
+                  speaker.current?.stop();
                   setSpeaking(false);
                 }}
               >

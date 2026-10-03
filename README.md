@@ -35,7 +35,7 @@ With `LLM_MODE=groq`, the app owner’s conversations and compaction use Groq wi
 
 All `.env.example` values are intentionally blank. Never commit `.env`, `.dev.vars`, or keys. DeepSpace generates local runtime configuration; app credentials belong in its encrypted Secrets store. Do not hand-edit `.dev.vars`.
 
-Optional owner-only server voice uses `GROQ_API_KEY` for Whisper transcription, and `VOICE_API_KEY` plus `VOICE_ID` for Fish Audio speech. Set rotated credentials through DeepSpace's Secrets UI/store and redeploy. `VOICE_ID` is the Fish voice reference identifier, not an API key. Listen uses the browser/device speech service by default and does not request Fish Audio. The uploaded greeting has a separate audio player. The owner-only Fish endpoint remains optional for API clients. Fish Audio HTTP 402 means API funding is required at https://fish.audio/app/developers, separate from subscription credits. No optional voice key is required for the shipped app.
+Owner-only server voice uses `GROQ_API_KEY` for Whisper transcription and `FISH_AUDIO_API_KEY` for Fish Audio speech. Store credentials through DeepSpace Secrets and redeploy. The Fish voice reference is `612b878b113047d9a770c069c8b4fdfe`. Listen requests server speech and falls back to the browser/device speech service if Fish fails. The uploaded greeting has a separate player. Fish HTTP 402 means API funding is required at https://fish.audio/app/developers, separate from subscription credits.
 
 ## Interface/API
 
@@ -187,3 +187,6 @@ and forecasts. Open-Meteo is available without a credential. Optionally configur
 Open-Meteo forecast data. Provider failures never expose API keys or raw error bodies.
 `GET /api/jarvis/connections/cities?q=...` performs bounded Open-Meteo geocoding.
 Displayed temperatures, track names and connection statuses are not hardcoded demos.
+
+
+Fish voice: store FISH_AUDIO_API_KEY in DeepSpace secrets (never frontend code). POST /api/tts accepts authenticated JSON {"text":"Good afternoon."}, at most 1000 characters, and returns audio/mpeg. Only the owner may spend this key; the voice rate limit is five requests per minute. Fish reference ID: 612b878b113047d9a770c069c8b4fdfe. HTTP 402 requires Fish API credits. Settings has Speak replies, Test voice, and Slow/Normal/Fast playback. Stop, microphone activation, page hiding and navigation cancel speech. Wake-word activation is not configured.

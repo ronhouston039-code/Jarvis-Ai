@@ -161,7 +161,11 @@ test("private memory isolates users and deletion requires an action-bound confir
   await Promise.all([a.page.goto("/personal"), b.page.goto("/personal")]);
   const content = `Private memory ${Date.now()}`;
   await a.page.getByRole("textbox", { name: "New memory" }).fill(content);
-  await a.page.locator("form").filter({ has: a.page.getByRole("textbox", { name: "New memory" }) }).getByRole("button", { name: "Remember", exact: true }).click();
+  await a.page
+    .locator("form")
+    .filter({ has: a.page.getByRole("textbox", { name: "New memory" }) })
+    .getByRole("button", { name: "Remember", exact: true })
+    .click();
   await expect(a.page.getByText(content, { exact: true })).toBeVisible();
   await expect(b.page.getByText(content, { exact: true })).toHaveCount(0);
   const card = a.page.locator(".personal-card").filter({ hasText: content });
@@ -394,7 +398,7 @@ test("other users cannot spend owner Groq or Fish credentials", async ({
     const path = "/src/jarvis/client.ts";
     const module = await import(path);
     const caps = await module.authenticatedFetch("/api/jarvis/capabilities");
-    const voice = await module.authenticatedFetch("/api/jarvis/voice/speak", {
+    const voice = await module.authenticatedFetch("/api/tts", {
       text: "Do not bill the owner",
     });
     const greeting = await module.authenticatedFetch(
@@ -541,7 +545,7 @@ test("security and live panels work and missing location is explained", async ({
   );
 });
 
-test("Listen uses device speech and never requests Fish audio", async ({
+test("Listen requests server Fish audio and falls back safely to device speech", async ({
   users,
 }) => {
   const [a] = await users(1);
@@ -550,9 +554,16 @@ test("Listen uses device speech and never requests Fish audio", async ({
       (window as unknown as { __spoken: string }).__spoken = utterance.text;
     };
   });
+  await a.page.route("**/api/tts", (route) =>
+    route.fulfill({
+      status: 402,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "speech_credits_required" }),
+    }),
+  );
   let fishRequests = 0;
   a.page.on("request", (r) => {
-    if (r.url().includes("/voice/speak")) fishRequests++;
+    if (r.url().endsWith("/api/tts")) fishRequests++;
   });
   await a.page.goto("/home");
   await a.page
@@ -568,18 +579,23 @@ test("Listen uses device speech and never requests Fish audio", async ({
     .getByRole("button", { name: "Read response aloud", exact: true })
     .last()
     .click();
-  expect(
-    await a.page.evaluate(
-      () => (window as unknown as { __spoken: string }).__spoken,
-    ),
-  ).toContain("current time");
-  expect(fishRequests).toBe(0);
+  await expect
+    .poll(() =>
+      a.page.evaluate(
+        () => (window as unknown as { __spoken: string }).__spoken,
+      ),
+    )
+    .toContain("current time");
+  expect(fishRequests).toBe(1);
 });
 
 test("voice activation speaks acknowledgement and each completed reply once", async ({
   users,
 }) => {
   const [a] = await users(1);
+  await a.page.route("**/api/tts", (route) =>
+    route.fulfill({ status: 502, contentType: "application/json", body: "{}" }),
+  );
   await a.page.addInitScript(() => {
     window.speechSynthesis.speak = (utterance) => {
       const w = window as unknown as { __spoken: string[] };
@@ -620,6 +636,80 @@ test("voice activation speaks acknowledgement and each completed reply once", as
       () => (window as unknown as { __spoken: string[] }).__spoken.length,
     ),
   ).toBe(2);
+});
+
+test("Fish MP3 playback animates the orb and microphone cancels speech", async ({
+  users,
+}) => {
+  const [a] = await users(1);
+  await a.page.addInitScript(() => {
+    const w = window as unknown as {
+      __paused: number;
+      __listening: boolean;
+      SpeechRecognition: unknown;
+      Audio: unknown;
+    };
+    w.__paused = 0;
+    w.Audio = class {
+      playbackRate = 1;
+      onended = null;
+      onerror = null;
+      play() {
+        return Promise.resolve();
+      }
+      pause() {
+        w.__paused++;
+      }
+    };
+    w.SpeechRecognition = class {
+      start() {
+        w.__listening = true;
+      }
+      stop() {}
+    };
+  });
+  await a.page.route("**/api/tts", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "audio/mpeg",
+      body: "ID3mock-audio",
+    }),
+  );
+  await a.page.goto("/home");
+  await a.page
+    .getByRole("textbox", { name: "Message JARVIS" })
+    .fill("Please get the current UTC time.");
+  await a.page.getByRole("button", { name: "Send message" }).click();
+  await expect(
+    a.page.getByText("The current time was retrieved successfully.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await a.page
+    .getByRole("button", { name: "Read response aloud", exact: true })
+    .last()
+    .click();
+  await expect(
+    a.page.getByText("Jarvis is speaking…", { exact: true }),
+  ).toBeVisible();
+  await a.page.getByRole("button", { name: "HOME", exact: true }).click();
+  await expect(a.page.locator(".jarvis-orb")).toHaveClass(/is-active/);
+  await a.page
+    .getByRole("button", { name: "Start voice input", exact: true })
+    .click();
+  await expect(
+    a.page.getByText("Jarvis is speaking…", { exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await a.page.evaluate(
+      () => (window as unknown as { __paused: number }).__paused,
+    ),
+  ).toBeGreaterThan(0);
+  expect(
+    await a.page.evaluate(
+      () => (window as unknown as { __listening: boolean }).__listening,
+    ),
+  ).toBe(true);
 });
 
 test("Apple Music is unavailable without owner developer configuration", async ({
@@ -874,13 +964,26 @@ test("preferences persist and action quota returns 429", async ({ users }) => {
   await expect(
     a.page.getByText("Preferences saved.", { exact: true }),
   ).toBeVisible();
-  await a.page.getByLabel("Daily briefing", { exact: true }).selectOption("off");
+  await a.page
+    .getByLabel("Daily briefing", { exact: true })
+    .selectOption("off");
   await a.page.getByLabel("Quiet hours start", { exact: true }).fill("23:00");
-  await a.page.getByRole("button", { name: "Save proactive preferences", exact: true }).click();
-  await expect(a.page.getByText("Preferences saved. Scheduled proactive services are not active yet.", { exact: true })).toBeVisible();
+  await a.page
+    .getByRole("button", { name: "Save proactive preferences", exact: true })
+    .click();
+  await expect(
+    a.page.getByText(
+      "Preferences saved. Scheduled proactive services are not active yet.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await a.page.reload();
-  await expect(a.page.getByLabel("Daily briefing", { exact: true })).toHaveValue("off");
-  await expect(a.page.getByLabel("Quiet hours start", { exact: true })).toHaveValue("23:00");
+  await expect(
+    a.page.getByLabel("Daily briefing", { exact: true }),
+  ).toHaveValue("off");
+  await expect(
+    a.page.getByLabel("Quiet hours start", { exact: true }),
+  ).toHaveValue("23:00");
   const statuses = await a.page.evaluate(async () => {
     const path = "/src/jarvis/client.ts";
     const module = await import(path);
