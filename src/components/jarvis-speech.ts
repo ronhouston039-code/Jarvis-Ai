@@ -37,7 +37,18 @@ export class JarvisSpeechPlayer {
     window.speechSynthesis?.cancel();
     this.state(false);
   }
-  async speak(text: string, speed: VoiceSpeed = "normal") {
+  greet(speed: VoiceSpeed = "normal") {
+    return this.speak(
+      "Systems are now fully operational. How can I assist you?",
+      speed,
+      "greeting",
+    );
+  }
+  async speak(
+    text: string,
+    speed: VoiceSpeed = "normal",
+    source: "reply" | "greeting" = "reply",
+  ) {
     this.stop();
     const id = this.generation;
     const spoken = spokenVersion(text);
@@ -75,8 +86,8 @@ export class JarvisSpeechPlayer {
     };
     try {
       const response = await authenticatedFetch(
-        "/api/tts",
-        { text: spoken },
+        source === "greeting" ? "/api/jarvis/voice/greeting" : "/api/tts",
+        source === "greeting" ? undefined : { text: spoken },
         request.signal,
       );
       if (

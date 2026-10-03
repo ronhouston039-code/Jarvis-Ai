@@ -73,7 +73,7 @@ DeepSpace is the source authority. Do not add a GitHub remote without deciding t
 
 ### Owner startup greeting and custom sample voice
 
-The owner can tap **Start JARVIS / play greeting** to play their uploaded MP3.
+The owner’s uploaded MP3 plays once after initial voice activation or the first eligible session tap. Say or type **repeat greeting** to hear it again; there is no on-screen greeting player.
 Safari requires a user gesture for audio playback. The recording is served through
 `GET /api/jarvis/voice/greeting`, with authentication, owner authorization and
 `Cache-Control: no-store`; it is not a public asset. Replace
@@ -215,3 +215,9 @@ Owner-scoped generic tools automatically expose approved capabilities through `l
 ### Native iOS companion
 
 See [ios/README.md](ios/README.md) and open `ios/JarvisCompanion/JarvisCompanion.xcodeproj` on a Mac. Direct Apple Home control is native-only, with local approvals and typed first-release actions. Web chat can queue explicitly shared opaque actions for the foreground companion. Authenticated sanitized audits appear in My space's activity log. A signed build on an iPhone is required to verify actual HomeKit connection; no native app has been installed or published from this workspace.
+
+### Radar dashboard and spoken startup greeting
+
+The Home dashboard follows the supplied cyan radar/globe layout with a live device-clock date/time, saved location, live weather where connected, upcoming reminders and client-reported local activity. System cards show actual server/network availability; they do not invent armed security, TV state, network speeds or music playback. The skyline/globe are original decorative artwork.
+
+The original uploaded greeting audio is played by JARVIS's speech controller, with no embedded audio controls or greeting replay button. For the owner with Fish voice available, spoken feedback starts enabled unless explicitly disabled. The first eligible tap/keyboard gesture unlocks one greeting per browser-tab session; iPhone browsers require an initial gesture before audio. Enabling voice manually also greets the owner. Turning voice off is respected. Stop, microphone activation and leaving the app cancel playback and pending requests. Say or type **repeat greeting**, **repeat the greeting**, or **Jarvis, repeat greeting** to replay it locally, without an LLM request. Other voice transcripts still appear for review before sending. If the saved audio is unavailable, device speech can deliver the short greeting. Wake-word detection/background listening remain unconfigured.

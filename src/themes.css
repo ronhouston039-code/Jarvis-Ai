@@ -1365,3 +1365,84 @@ a:focus-visible {
 .live-result pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .holo-modules button,.holo-modules a{text-align:center;color:inherit}
 .hud-panel-action{display:inline-block;color:#79d9fa;font-size:10px;margin-top:8px;text-decoration:underline}
+
+/* Live JARVIS command dashboard: layout follows the supplied radar reference. */
+.hud-dashboard { padding: 0 16px 12px 0; background: #020b18 url('/images/jarvis-city.svg') center 80px / cover no-repeat; min-height: 760px; }
+.hud-top { display: grid; grid-template-columns: 1fr auto 200px; gap: 24px; height: 54px; padding: 0 12px 0 26px; border-bottom: 1px solid #0b3854; margin-bottom: 16px; background: #020d1ce8; }
+.hud-brand { text-align: left; }
+.hud-brand h1 { font-size: 24px; letter-spacing: 5px; color: #26ddef; text-shadow: none; }
+.hud-clock { flex-direction: row-reverse; align-items: center; border: 0; background: none; padding: 0; gap: 16px; box-shadow: none; }
+.hud-clock:before,.hud-clock:after { display: none; }
+.hud-clock strong { font-size: 12px; color: #27d9eb; letter-spacing: 0; }
+.hud-clock span { font-size: 11px; color: #27d9eb; text-transform: none; letter-spacing: 0; }
+.hud-weather { padding: 0 0 0 18px; border-left: 1px solid #1b4968; gap: 8px; }
+.hud-weather strong { font-size: 12px; letter-spacing: 0; }
+.hud-weather span { font-size: 9px; margin-top: 0; }
+.hud-weather span:last-child { display: none; }
+.hud-body { grid-template-columns: 112px 256px minmax(360px,1fr) 350px; gap: 16px; min-height: 560px; }
+.hud-menu { border-right: 1px solid #124467; gap: 0; background: linear-gradient(#020f20e0,#020b1800); padding-top: 10px; }
+.hud-menu button,.hud-menu > a { border: 0; border-radius: 0; min-height: 54px; background: transparent; font-size: 12px; padding: 12px 16px; gap: 10px; }
+.hud-menu button.active { border-left: 3px solid #13e7fc; background: linear-gradient(90deg,#064873,#092037); box-shadow: inset 0 0 20px #06b3ff25; color: #b6f1ff; }
+.hud-panel { border-radius: 13px; border-color: #0c3c61; background: linear-gradient(145deg,#061c35ed,#021327ed); box-shadow: inset 0 0 14px #1782c414,0 4px 18px #0006; }
+.hud-panel:before,.hud-panel:after { display: none; }
+.hud-panel h2 { color: #d7e7f7; font-size: 14px; letter-spacing: 0; text-shadow: none; font-weight: 500; margin-bottom: 10px; }
+.hud-dot { width: 7px; height: 7px; border: 0; background: #00ed9b; box-shadow: none; }
+.system-summary { font-size: 11px; color: #27d8e9; display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.system-row,.system-panel .hud-connection { display: flex; gap: 12px; align-items: center; justify-content: flex-start; padding: 13px 10px; background: #0323429e; margin-top: 6px; border: 1px solid #123450; border-radius: 10px; font-size: 12px; color: #d9eaf7; }
+.system-row > svg:first-child,.system-panel .hud-connection > svg { width: 26px; height: 26px; color: #00d9f4; }
+.system-row > svg:last-child { margin-left: auto; color: #22cae8; }
+.system-row small,.system-panel .hud-connection small { display: block; margin-top: 3px; margin-left: 0; font-size: 10px; color: #51a4d6; }
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-grid button,.quick-grid a { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; padding: 14px 4px; min-height: 78px; border-radius: 10px; border: 1px solid #123855; background: #052343; font-size: 11px; }
+.quick-grid svg { color: #00d9f4; width: 27px; height: 27px; }
+.quick-grid button:hover,.quick-grid a:hover { background: #094068; border-color: #16d4ec; }
+.hud-history { max-height: 170px; }
+.hud-history h2 { font-size: 12px; }
+.hud-main { background: transparent; }
+.hud-stage-label { position: absolute; top: 5px; left: 0; right: 0; z-index: 1; font-size: 7px; opacity: .65; }
+.hud-hologram { min-height: 560px; }
+.hud-hologram .jarvis-orb { width: min(100%,490px); height: 550px; top: 14px; }
+.hud-reactor { filter: drop-shadow(0 0 8px #00b9ff66); }
+.holographic-earth { top: 76%; left: 34%; width: 32%; }
+.hologram-platform { display: none; }
+.assistant-panel { display: flex; gap: 14px; align-items: flex-start; }
+.assistant-panel > svg { color: #00dbf8; background: #005b80; border-radius: 50%; padding: 5px; width: 38px; height: 38px; flex-shrink: 0; }
+.assistant-panel h2 { margin-bottom: 3px; }
+.assistant-state { display: flex; align-items: center; gap: 6px; color: #22e390; font-size: 11px; margin-bottom: 5px; }
+.assistant-panel button { font-size: 12px; text-align: left; line-height: 1.6; color: #d7e7f5; }
+.location-panel { min-height: 116px; }
+.location-panel h2 { justify-content: flex-start; gap: 8px; }
+.location-panel .map-placeholder { float: right; width: 105px; height: 72px; margin: 0 0 0 12px; border-radius: 8px; }
+.location-panel p { font-size: 12px; margin-top: 6px; }
+.location-panel small { font-size: 10px; }
+.hud-right .hud-panel { padding: 15px; }
+.hud-right { gap: 10px; }
+.upcoming-panel h2 > svg { color: #08d5eb; }
+.upcoming-panel h2 { gap: 8px; }
+.upcoming-panel h2 a { margin-left: auto; }
+.hud-activity > h2 a { color: #16c8da; font-size: 10px; }
+.hud-activity .personal-card { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.hud-activity .personal-card h2,.hud-activity .personal-card button,.hud-activity .personal-card > div > p:first-of-type { display: none; }
+.hud-activity article { padding: 7px 0; border-bottom: 1px solid #123453; }
+.hud-activity article:last-child { border: 0; }
+.hud-activity h3 { font-size: 11px; font-weight: 500; }
+.hud-activity article p,.hud-activity time { font-size: 10px; color: #82aecf; }
+.hud-activity p { font-size: 11px; }
+.media-panel h2 { justify-content: flex-start; gap: 8px; }
+.hud-bottom { margin: 18px 0 0 16px; }
+.hud-bottom .composer-area { max-width: none; }
+.hud-bottom .composer { border-radius: 38px; min-height: 70px; background: linear-gradient(90deg,#031a31e8,#042641cf,#031a31e8); border: 1px solid #126393; padding: 10px 22px; box-shadow: inset 0 0 20px #0b70b323,0 0 20px #007ac021; }
+.hud-bottom .mic-button { height: 52px; width: 52px; display: grid; place-items: center; border: 2px solid #00d9fb; box-shadow: 0 0 15px #00c6f5; color: #05e7ff; }
+.hud-bottom .composer textarea { font-size: 13px; }
+.hud-bottom .connection-actions { margin: 8px 16px; }
+.hud-bottom .composer-area > .muted { font-size: 10px; margin-left: 16px; }
+@media (prefers-reduced-motion: reduce) { .radar-sweep { animation: none !important; } }
+.radar-sweep { transform-origin: 250px 250px; animation: reactor-spin 12s linear infinite; }
+.jarvis-orb.is-active .radar-sweep { animation-duration: 4s; }
+.hud-hologram .hud-reactor { width: 84%; left: 8%; }
+.hud-bottom .composer { position: relative; }
+.hud-bottom .composer:before { content: ''; position: absolute; left: 5%; top: 50%; transform: translateY(-50%); width: 28%; height: 44px; background: url('/images/jarvis-wave.svg') center / contain no-repeat; pointer-events: none; }
+.hud-bottom .composer textarea { padding-left: 49%; }
+.hud-bottom .composer .mic-button { position: absolute; left: 43%; top: 50%; transform: translate(-50%,-50%); }
+.hud-weather span:last-child { display: block; }
+.hud-weather span:nth-of-type(2) { display: none; }

@@ -1,3 +1,4 @@
+import { HomeKitActivity } from "./HomeKitActivity";
 import { WeatherSummary } from "./WeatherConnect";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useQuery } from "deepspace";
@@ -7,20 +8,16 @@ import {
   MessageSquare,
   LayoutGrid,
   Tv,
-  Car,
   Music,
   CalendarDays,
   Shield,
   Settings,
   CloudSun,
   MapPin,
-  Mic,
   Wifi,
   WifiOff,
   ChevronRight,
   Brain,
-  Clock,
-  NotebookPen,
 } from "lucide-react";
 import { JarvisOrb } from "./JarvisOrb";
 
@@ -153,35 +150,14 @@ export function JarvisHud(p: Props) {
       >
         <div ref={dashboard} className="hud-dashboard">
           <header className="hud-top">
-            <ClockPanel />
-            <Link to="/connections?tab=live" className="hud-weather hud-panel">
-              <CloudSun size={33} />
-              <WeatherSummary />
-            </Link>
             <div className="hud-brand">
               <h1>JARVIS</h1>
-              <p>YOUR PERSONAL AI ASSISTANT</p>
             </div>
-            <Connection />
-            <button
-              onClick={p.onVoice}
-              aria-label="Activate voice input"
-              className={`hud-voice hud-panel ${p.listening ? "listening" : ""}`}
-            >
-              <Mic size={25} />
-              <div className="voice-wave">
-                {Array.from({ length: 17 }, (_, i) => (
-                  <i key={i} style={{ height: `${8 + ((i * 7) % 23)}px` }} />
-                ))}
-                <span>
-                  {p.listening
-                    ? "Listening…"
-                    : p.busy
-                      ? "Responding…"
-                      : "Voice standby"}
-                </span>
-              </div>
-            </button>
+            <ClockPanel />
+            <Link to="/connections?tab=live" className="hud-weather">
+              <CloudSun size={25} />
+              <WeatherSummary />
+            </Link>
           </header>
           <div className="hud-body">
             <aside className="hud-menu" aria-label="Dashboard navigation">
@@ -196,24 +172,13 @@ export function JarvisHud(p: Props) {
                 <MessageSquare />
                 CHAT
               </button>
-              {[
-                { icon: LayoutGrid, label: "APPS", tab: "apps" },
-                { icon: Tv, label: "SMART HOME", tab: "home" },
-                { icon: Car, label: "VEHICLE", tab: "vehicle" },
-                { icon: Music, label: "MEDIA", tab: "music" },
-              ].map(({ icon: Icon, label, tab }) => (
-                <Link key={label} to={`/connections?tab=${tab}`}>
-                  <Icon />
-                  {label}
-                </Link>
-              ))}
-              <Link to="/personal">
-                <CalendarDays />
-                PRODUCTIVITY
+              <Link to="/connections?tab=home" aria-label="SMART HOME">
+                <Tv />
+                Devices
               </Link>
-              <Link to="/connections?tab=security">
-                <Shield />
-                SECURITY
+              <Link to="/connections?tab=apps">
+                <LayoutGrid />
+                Apps
               </Link>
               <Link to="/settings">
                 <Settings />
@@ -222,78 +187,75 @@ export function JarvisHud(p: Props) {
             </aside>
             <aside className="hud-support">
               <section className="hud-panel system-panel">
-                <h2>
-                  SYSTEM STATUS <ChevronRight size={14} />
-                </h2>
-                <ul>
-                  <li>
-                    <span className="hud-dot" />
-                    AI conversation <small>Available</small>
-                  </li>
-                  <li>
-                    <span className="hud-dot" />
-                    Personal memory <small>Available</small>
-                  </li>
-                  <li>
-                    <span className="hud-dot" />
-                    Reminders <small>Available</small>
-                  </li>
-                  <li>
-                    <span className="hud-dot dim" />
-                    Smart devices{" "}
+                <h2>System Status</h2>
+                <p className="system-summary">
+                  <span className={serverOnline ? "hud-dot" : "hud-dot dim"} />
+                  {serverOnline === null
+                    ? "Checking server…"
+                    : serverOnline
+                      ? "Cloud server operational"
+                      : "Cloud unavailable"}
+                </p>
+                <Link className="system-row" to="/connections?tab=home">
+                  <Tv />
+                  <span>
+                    Smart devices
                     <small>
                       {devices.length
-                        ? `${devices.length} shortcuts`
-                        : "Tap to connect"}
+                        ? `${devices.length} shortcuts · state unverified`
+                        : "Connect your accessories"}
                     </small>
-                  </li>
-                  <li>
-                    <span className="hud-dot dim" />
-                    Live information <small>Online sources</small>
-                  </li>
-                  <li>
-                    <span
-                      className={serverOnline ? "hud-dot" : "hud-dot dim"}
-                    />
-                    <Link to="/connections?tab=security">Security status</Link>
+                  </span>
+                  <ChevronRight size={16} />
+                </Link>
+                <Connection />
+                <Link className="system-row" to="/connections?tab=security">
+                  <Shield />
+                  <span>
+                    Security
                     <small>
-                      {serverOnline === null
-                        ? "Checking"
-                        : serverOnline
-                          ? "Server online"
-                          : "Unavailable"}
+                      {serverOnline
+                        ? "HTTPS server online"
+                        : "Check connection"}
                     </small>
-                  </li>
-                </ul>
-                <Link className="hud-panel-action" to="/connections?tab=apps">
-                  Manage connections
+                  </span>
+                  <ChevronRight size={16} />
                 </Link>
               </section>
               <section className="hud-panel quick-panel">
-                <h2>QUICK ACTIONS</h2>
-                <button onClick={() => p.onPrompt("Help me plan my day")}>
-                  <CalendarDays size={17} />
-                  Plan my day
-                </button>
-                <button onClick={() => p.onPrompt("Remind me to ")}>
-                  <Clock size={17} />
-                  Create reminder
-                </button>
-                <button onClick={() => p.onPrompt("Remember that ")}>
-                  <NotebookPen size={17} />
-                  Save a preference
-                </button>
-                <button
-                  onClick={() => p.onPrompt("What can you help me with?")}
+                <h2>Quick Actions</h2>
+                <div className="quick-grid">
+                  <button onClick={() => p.onPrompt("Turn off the TV.")}>
+                    <Tv />
+                    <span>Turn Off TV</span>
+                  </button>
+                  <Link to="/connections?tab=music">
+                    <Music />
+                    <span>Play Music</span>
+                  </Link>
+                  <Link to="/connections?tab=home">
+                    <Home />
+                    <span>Smart Home</span>
+                  </Link>
+                  <Link to="/connections?tab=apps">
+                    <LayoutGrid />
+                    <span>Open App</span>
+                  </Link>
+                </div>
+                <Link
+                  className="hud-panel-action"
+                  to="/personal"
+                  aria-label="PRODUCTIVITY"
                 >
-                  <Brain size={17} />
-                  Ask JARVIS
-                </button>
+                  Plan my day & reminders
+                </Link>
               </section>
-              <section className="hud-panel hud-history">
-                <h2>CONVERSATIONS</h2>
-                {p.history}
-              </section>
+              {p.showChat && (
+                <section className="hud-panel hud-history">
+                  <h2>CONVERSATIONS</h2>
+                  {p.history}
+                </section>
+              )}
             </aside>
             <main className={`hud-main ${p.showChat ? "chat-open" : ""}`}>
               <div className="hud-stage-label">
@@ -310,28 +272,38 @@ export function JarvisHud(p: Props) {
               ) : (
                 <div className="hud-hologram">
                   <JarvisOrb active={p.listening || p.busy || p.speaking} />
-                  <div className="hologram-caption">
-                    <span>J.A.R.V.I.S.</span>
-                    <p>Ready when you are.</p>
-                  </div>
-                  <div className="holo-modules">
-                    <button className="hud-panel" onClick={p.onChat}>
-                      <Brain size={30} />
-                      <span>INTELLIGENCE CORE</span>
-                      <small>Conversation & reasoning</small>
-                    </button>
-                    <Link className="hud-panel" to="/personal">
-                      <Shield size={30} />
-                      <span>YOUR PRIVATE SPACE</span>
-                      <small>Memory & reminders</small>
-                    </Link>
-                  </div>
                 </div>
               )}
             </main>
             <aside className="hud-right">
+              <section className="hud-panel assistant-panel">
+                <Brain size={30} />
+                <div>
+                  <h2>AI Assistant</h2>
+                  <p className="assistant-state">
+                    <span
+                      className={serverOnline ? "hud-dot" : "hud-dot dim"}
+                    />
+                    {p.speaking
+                      ? "Speaking…"
+                      : p.listening
+                        ? "Listening…"
+                        : p.busy
+                          ? "Working…"
+                          : serverOnline
+                            ? "Ready"
+                            : "Checking connection"}
+                  </p>
+                  <button onClick={p.onChat}>
+                    I’m here and ready. How can I help you today?
+                  </button>
+                </div>
+              </section>
               <section className="hud-panel location-panel">
-                <h2>CURRENT LOCATION</h2>
+                <h2>
+                  <MapPin size={18} />
+                  Location
+                </h2>
                 <Link
                   to="/connections?tab=location"
                   className="map-placeholder"
@@ -354,48 +326,25 @@ export function JarvisHud(p: Props) {
               </section>
               <section className="hud-panel upcoming-panel">
                 <h2>
-                  UPCOMING{" "}
+                  <CalendarDays size={18} />
+                  Upcoming Reminders{" "}
                   <Link to="/personal" aria-label="Manage reminders">
                     +
                   </Link>
                 </h2>
                 {p.upcoming}
               </section>
-              <section className="hud-panel capabilities-panel">
-                <h2>AI ASSISTANT</h2>
-                <ul>
-                  <li>
-                    <button
-                      onClick={() => p.onPrompt("What can you help me with?")}
-                    >
-                      Answer questions
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      onClick={() =>
-                        p.onPrompt("Help me think through an idea")
-                      }
-                    >
-                      Think through ideas
-                    </button>
-                  </li>
-                  <li>
-                    <Link to="/personal">Plan & create reminders</Link>
-                  </li>
-                  <li>
-                    <Link to="/settings">Remember preferences</Link>
-                  </li>
-                  <li>
-                    <button onClick={p.onChat}>Continue conversations</button>
-                  </li>
-                </ul>
-                <span className="hud-small-label">
-                  Connected capabilities only
-                </span>
+              <section className="hud-panel hud-activity">
+                <h2>
+                  Recent Activity<Link to="/personal">See all</Link>
+                </h2>
+                <HomeKitActivity compact />
               </section>
               <section className="hud-panel media-panel">
-                <h2>MEDIA CONTROL</h2>
+                <h2>
+                  <Music size={18} />
+                  Music
+                </h2>
                 <Music size={24} />
                 <p>
                   {devices.some((d) => d.data.kind === "music")

@@ -7,6 +7,10 @@ export function JarvisOrb({ active = false }: { active?: boolean }) {
     >
       <svg className="hud-reactor" viewBox="0 0 500 500" fill="none">
         <defs>
+          <linearGradient id="radar-beam">
+            <stop stopColor="#00ddff" stopOpacity="0" />
+            <stop offset="1" stopColor="#00e4ff" stopOpacity=".7" />
+          </linearGradient>
           <radialGradient id="reactor-light">
             <stop stopColor="#39d5ff" stopOpacity=".28" />
             <stop offset="1" stopColor="#0876da" stopOpacity="0" />
@@ -68,6 +72,28 @@ export function JarvisOrb({ active = false }: { active?: boolean }) {
           stroke="#2ac1ff"
           opacity=".5"
         />
+        <g className="radar-sweep">
+          <path
+            d="M250 250 L250 38 A212 212 0 0 1 400 100 Z"
+            fill="url(#radar-beam)"
+          />
+          <path d="M250 250L400 100" stroke="#10e8ff" strokeWidth="3" />
+        </g>
+        {Array.from({ length: 12 }, (_, i) => {
+          const angle = ((i * 30 - 90) * Math.PI) / 180;
+          return (
+            <text
+              key={i}
+              x={250 + 244 * Math.cos(angle)}
+              y={254 + 244 * Math.sin(angle)}
+              fill="#17d7eb"
+              fontSize="10"
+              textAnchor="middle"
+            >
+              {i * 30}
+            </text>
+          );
+        })}
         <circle cx="250" cy="250" r="10" fill="#67edff" />
         <circle cx="250" cy="250" r="20" stroke="#32b9ff" opacity=".5" />
         {[0, 90, 180, 270].map((a) => (

@@ -290,6 +290,7 @@ test("streamed chat executes registered time tool and persists across reload", a
     }),
   ).toHaveCount(0);
   await a.page.reload();
+  await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await a.page.locator(".history-item").first().click();
   await expect(
     a.page.getByText("The current time was retrieved successfully.", {

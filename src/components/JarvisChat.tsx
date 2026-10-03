@@ -1,6 +1,6 @@
-import { HomeKitActivity } from "./HomeKitActivity";
+import { isGreetingRequest } from "../jarvis/greeting";
 import { JarvisSpeechPlayer, type VoiceSpeed } from "./jarvis-speech";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, listDeepSpaceAgentModels } from "deepspace";
 import {
   ArrowUp,
@@ -52,7 +52,6 @@ export function JarvisChat({ userId }: { userId: string }) {
     fishVoice: boolean;
     serverTranscription: boolean;
   } | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
@@ -68,42 +67,71 @@ export function JarvisChat({ userId }: { userId: string }) {
     previousIds: Set<string>;
     started: boolean;
   } | null>(null);
-  const playback = useRef<HTMLAudioElement | null>(null);
   const speech = useRef<Recognition | null>(null);
   useEffect(() => {
     let active = true;
     void authenticatedFetch("/api/jarvis/capabilities")
       .then(async (response) => {
-        if (response.ok && active) setCapabilities(await response.json());
+        if (response.ok && active) {
+          const data = (await response.json()) as NonNullable<
+            typeof capabilities
+          >;
+          setCapabilities(data);
+          try {
+            if (
+              data.fishVoice &&
+              sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === null
+            ) {
+              sessionStorage.setItem(`jarvis-voice-feedback:${userId}`, "on");
+              setVoiceEnabled(true);
+            }
+          } catch {
+            /* Explicit voice activation remains available. */
+          }
+        }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
   }, [userId]);
-  useEffect(
-    () => () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-    },
-    [audioUrl],
-  );
-  async function playGreeting() {
-    playback.current?.pause();
-    setVoiceError("");
-    setSpeaking(true);
+  const playGreeting = useCallback(async () => {
+    pendingSpeech.current = null;
+    let speed: VoiceSpeed = "normal";
     try {
-      const response = await authenticatedFetch("/api/jarvis/voice/greeting");
-      if (!response.ok) throw new Error("greeting_unavailable");
-      setAudioUrl(URL.createObjectURL(await response.blob()));
+      sessionStorage.setItem(`jarvis-greeted:${userId}`, "yes");
+      const saved = sessionStorage.getItem(`jarvis-voice-speed:${userId}`);
+      if (saved === "slow" || saved === "fast") speed = saved;
     } catch {
-      setVoiceError("Could not load your startup greeting. Please try again.");
-    } finally {
-      setSpeaking(false);
+      /* Playback still works without storage. */
     }
-  }
+    await speaker.current?.greet(speed);
+  }, [userId]);
+  useEffect(() => {
+    if (!voiceEnabled || !capabilities?.fishVoice) return;
+    try {
+      if (sessionStorage.getItem(`jarvis-greeted:${userId}`)) return;
+    } catch {
+      return;
+    }
+    const begin = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-greeting-skip], input, textarea")
+      )
+        return;
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+      void playGreeting();
+    };
+    window.addEventListener("pointerdown", begin);
+    window.addEventListener("keydown", begin);
+    return () => {
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
+  }, [voiceEnabled, capabilities?.fishVoice, userId, playGreeting]);
   function speak(text: string) {
-    playback.current?.pause();
-    setAudioUrl(null);
     let speed: VoiceSpeed = "normal";
     try {
       const saved = sessionStorage.getItem(`jarvis-voice-speed:${userId}`);
@@ -203,7 +231,8 @@ export function JarvisChat({ userId }: { userId: string }) {
         /* Playback still works without session storage. */
       }
       setVoiceEnabled(true);
-      speak("Voice enabled. I’m ready.");
+      if (capabilities?.fishVoice) void playGreeting();
+      else speak("Voice enabled. I’m ready.");
     }
   }
   function stopResponse() {
@@ -219,7 +248,6 @@ export function JarvisChat({ userId }: { userId: string }) {
     const end = () => {
       speech.current?.stop();
       speaker.current?.stop();
-      playback.current?.pause();
     };
     document.addEventListener("visibilitychange", end);
     return () => {
@@ -234,7 +262,6 @@ export function JarvisChat({ userId }: { userId: string }) {
       return;
     }
     speaker.current?.stop();
-    playback.current?.pause();
     setSpeaking(false);
     const Constructor =
       (window as SpeechWindow).SpeechRecognition ??
@@ -250,12 +277,15 @@ export function JarvisChat({ userId }: { userId: string }) {
     recognition.lang = navigator.language;
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.onresult = (e) =>
-      setDraft(
-        Array.from(e.results)
-          .map((r) => r[0].transcript)
-          .join(" "),
-      );
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(" ");
+      if (isGreetingRequest(transcript)) {
+        recognition.stop();
+        void playGreeting();
+      } else setDraft(transcript);
+    };
     recognition.onend = () => setListening(false);
     recognition.onerror = (e) => {
       setListening(false);
@@ -275,6 +305,12 @@ export function JarvisChat({ userId }: { userId: string }) {
   }
   function submit() {
     if (!draft.trim() || isLoading) return;
+    if (isGreetingRequest(draft)) {
+      speech.current?.stop();
+      setDraft("");
+      void playGreeting();
+      return;
+    }
     speech.current?.stop();
     setShowChat(true);
     pendingSpeech.current = voiceEnabled
@@ -366,7 +402,6 @@ export function JarvisChat({ userId }: { userId: string }) {
       }
       conversation={
         <div className="message-list" aria-live="polite">
-          <HomeKitActivity compact />
           {messages.map((m) => (
             <article key={m.id} className={`message ${m.role}`}>
               <div className="message-label">
@@ -432,6 +467,7 @@ export function JarvisChat({ userId }: { userId: string }) {
             />
             <div className="composer-actions">
               <button
+                data-greeting-skip
                 className={`mic-button ${listening ? "recording" : ""}`}
                 aria-label={listening ? "Stop listening" : "Start voice input"}
                 onClick={dictate}
@@ -461,6 +497,7 @@ export function JarvisChat({ userId }: { userId: string }) {
           <div className="connection-actions">
             <button
               className="read-aloud"
+              data-greeting-skip
               aria-pressed={voiceEnabled}
               onClick={toggleVoice}
             >
@@ -485,25 +522,6 @@ export function JarvisChat({ userId }: { userId: string }) {
               ? "New replies will be spoken. Keep JARVIS open and your media volume up."
               : "Turn voice on to hear replies automatically, or tap Listen beneath a reply."}
           </p>
-          {capabilities?.fishVoice && (
-            <button
-              className="read-aloud"
-              disabled={speaking}
-              onClick={playGreeting}
-            >
-              <Volume2 size={16} /> Start JARVIS / play greeting
-            </button>
-          )}
-          {audioUrl && (
-            <audio
-              ref={playback}
-              controls
-              autoPlay
-              src={audioUrl}
-              className="hud-audio"
-              aria-label="JARVIS audio playback"
-            />
-          )}
 
           <p className="composer-footnote">
             {listening
