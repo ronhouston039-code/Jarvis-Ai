@@ -20,7 +20,12 @@ function playbackTime(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-export function NowPlaying() {
+type NowPlayingProps = {
+  vamp?: { supported: boolean; status: string | null };
+  onPlayVamp?: () => void;
+};
+
+export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
   const auth = useAuthProfileReady({ requireUser: true });
   const userId = auth.isReady && auth.isSignedIn ? auth.userId : null;
   const identity = useRef(userId);
@@ -322,6 +327,25 @@ export function NowPlaying() {
         <p className="dashboard-music-message" role="status">
           {message}
         </p>
+      )}
+      {vamp?.supported && (
+        <div className="dashboard-vamp-shortcut">
+          <button
+            type="button"
+            aria-label="Review Play Vamp request"
+            data-greeting-skip
+            disabled={!onPlayVamp || !userId}
+            onClick={onPlayVamp}
+          >
+            <Play size={13} aria-hidden="true" />
+            Play Vamp
+          </button>
+          {vamp.status && (
+            <p className="dashboard-vamp-status" role="status">
+              {vamp.status}
+            </p>
+          )}
+        </div>
       )}
     </section>
   );

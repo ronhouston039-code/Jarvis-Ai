@@ -110,10 +110,47 @@
   color: #b5d3e9;
   font-size: 10px;
 }
+.dashboard-vamp-shortcut {
+  margin-top: 7px;
+}
+.dashboard-vamp-shortcut button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid #00d2ff70;
+  border-radius: 7px;
+  color: #79e8ff;
+  background: #00d2ff0b;
+  font-size: 11px;
+  cursor: pointer;
+}
+.dashboard-vamp-shortcut button:hover {
+  background: #00d2ff22;
+}
+.dashboard-vamp-shortcut button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+.dashboard-vamp-shortcut button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dashboard-vamp-status {
+  margin: 5px 0 0;
+  color: #b5d3e9;
+  font-size: 10px;
+  line-height: 1.45;
+}
 @media (max-width: 640px) {
   .dashboard-music-controls button,
   .dashboard-music-controls .dashboard-music-play {
     width: 44px;
     height: 44px;
+  }
+  .dashboard-vamp-shortcut button {
+    min-height: 44px;
   }
 }

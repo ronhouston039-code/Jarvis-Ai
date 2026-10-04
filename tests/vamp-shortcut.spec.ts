@@ -1,0 +1,233 @@
+import { expect, loadAllTestAccounts, test } from "deepspace/testing";
+import type { Page } from "@playwright/test";
+
+test.skip(loadAllTestAccounts().length < 1, "Requires test account");
+
+async function prepareIPhone(page: Page, voice = false) {
+  await page.addInitScript(
+    ({ voice }) => {
+      Object.defineProperty(navigator, "userAgent", {
+        get: () =>
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+      });
+      Object.defineProperty(navigator, "platform", { get: () => "iPhone" });
+      const state = window as unknown as {
+        vampLaunches: Array<{ name: string; url: string }>;
+        vampVoiceStarts: number;
+        vampRecognition: { onresult?: (event: unknown) => void };
+        vampUtterances: string[];
+        vampStreams: MediaStream[];
+      };
+      state.vampLaunches = [];
+      state.vampVoiceStarts = 0;
+      state.vampUtterances = [];
+      state.vampStreams = [];
+      window.addEventListener("jarvis-music-shortcut-launch", (event) => {
+        // Record the reviewed native handoff without opening an external app.
+        event.preventDefault();
+        state.vampLaunches.push((event as CustomEvent).detail);
+      });
+      if (!voice) return;
+      Object.defineProperty(window, "speechSynthesis", {
+        value: {
+          cancel() {},
+          speak(utterance: SpeechSynthesisUtterance) {
+            state.vampUtterances.push(utterance.text);
+            utterance.onstart?.(new Event("start") as SpeechSynthesisEvent);
+            utterance.onend?.(new Event("end") as SpeechSynthesisEvent);
+          },
+        },
+      });
+      Object.defineProperty(window, "SpeechRecognition", {
+        value: class {
+          onresult?: (event: unknown) => void;
+          onend?: () => void;
+          start() {
+            state.vampRecognition = this;
+            state.vampVoiceStarts++;
+          }
+          stop() {
+            this.onend?.();
+          }
+        },
+      });
+      navigator.mediaDevices.getUserMedia = async () => {
+        const context = new AudioContext();
+        await context.resume();
+        const stream = context.createMediaStreamDestination().stream;
+        state.vampStreams.push(stream);
+        const track = stream.getTracks()[0];
+        const originalStop = track.stop.bind(track);
+        track.stop = () => {
+          originalStop();
+          void context.close();
+        };
+        return stream;
+      };
+    },
+    { voice },
+  );
+  await page.route("**/api/jarvis/capabilities", (route) =>
+    route.fulfill({ json: { fishVoice: false } }),
+  );
+  if (voice)
+    await page.route("**/api/tts", (route) =>
+      route.fulfill({ status: 503, json: { error: "test_device_fallback" } }),
+    );
+}
+
+async function launches(page: Page) {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          vampLaunches: Array<{ name: string; url: string }>;
+        }
+      ).vampLaunches,
+  );
+}
+
+test("iPhone Vamp quick action and music card review require explicit confirmation", async ({
+  users,
+}) => {
+  const [user] = await users(1);
+  await prepareIPhone(user.page);
+  await user.page.goto("/home");
+  await user.page
+    .getByRole("button", { name: "Play Vamp", exact: true })
+    .click();
+  const dialog = user.page.getByRole("dialog", {
+    name: "Play Vamp on your iPhone?",
+  });
+  await expect(dialog).toBeVisible();
+  expect(await launches(user.page)).toEqual([]);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(await launches(user.page)).toEqual([]);
+  await expect(
+    user.page.getByText("Music request dispatched: Play Vamp", { exact: true }),
+  ).toHaveCount(0);
+  await user.page
+    .getByRole("button", { name: "Review Play Vamp request", exact: true })
+    .click();
+  await expect(dialog).toBeVisible();
+  expect(await launches(user.page)).toEqual([]);
+  await dialog
+    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .click();
+  expect(await launches(user.page)).toEqual([
+    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+  ]);
+  await expect(dialog).not.toBeVisible();
+});
+
+test("iPhone Vamp handoff records a timestamped request and never implies verified playback", async ({
+  users,
+}) => {
+  const [user] = await users(1);
+  await prepareIPhone(user.page);
+  await user.page.goto("/home");
+  await user.page
+    .getByRole("button", { name: "Play Vamp", exact: true })
+    .click();
+  await user.page
+    .getByRole("dialog", { name: "Play Vamp on your iPhone?" })
+    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .click();
+  const entry = user.page.getByText("Music request dispatched: Play Vamp", {
+    exact: true,
+  });
+  await expect(entry).toBeVisible();
+  const timestamp = await entry
+    .locator("..")
+    .locator("time")
+    .getAttribute("datetime");
+  expect(Number.isFinite(Date.parse(timestamp ?? ""))).toBe(true);
+  await expect(
+    user.page.getByText("Requested — awaiting device playback confirmation.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await launches(user.page)).toHaveLength(1);
+  await user.page.reload();
+  await expect(
+    user.page.getByText("Music request dispatched: Play Vamp", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    user.page.getByText("Requested — awaiting device playback confirmation.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await launches(user.page)).toEqual([]);
+});
+
+test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthful dispatch", async ({
+  users,
+}) => {
+  const [user] = await users(1);
+  await prepareIPhone(user.page, true);
+  let llmRequests = 0;
+  await user.page.route("**/api/ai/chat", (route) => {
+    llmRequests++;
+    return route.fulfill({
+      status: 503,
+      json: { error: "unexpected_llm_request" },
+    });
+  });
+  await user.page.goto("/home");
+  await user.page
+    .getByRole("button", { name: "Start continuous voice session" })
+    .click();
+  await user.page.waitForFunction(
+    () =>
+      (window as unknown as { vampVoiceStarts: number }).vampVoiceStarts === 1,
+  );
+  await user.page.evaluate(() =>
+    (
+      window as unknown as {
+        vampRecognition: { onresult: (event: unknown) => void };
+      }
+    ).vampRecognition.onresult({
+      results: [
+        Object.assign([{ transcript: "Jarvis, play Vamp" }], { isFinal: true }),
+      ],
+    }),
+  );
+  const dialog = user.page.getByRole("dialog", {
+    name: "Play Vamp on your iPhone?",
+  });
+  await expect(dialog).toBeVisible();
+  expect(llmRequests).toBe(0);
+  expect(await launches(user.page)).toEqual([]);
+  await dialog
+    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      user.page.evaluate(
+        () =>
+          (window as unknown as { vampUtterances: string[] }).vampUtterances,
+      ),
+    )
+    .toContain("Sending the Vamp play request now, Sir.");
+  await expect(
+    user.page.getByText("Requested — awaiting device playback confirmation.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await launches(user.page)).toEqual([
+    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+  ]);
+  expect(llmRequests).toBe(0);
+  await expect(
+    user.page.getByRole("button", { name: "End voice session", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await user.page.evaluate(() =>
+      (window as unknown as { vampStreams: MediaStream[] }).vampStreams.every(
+        (stream) =>
+          stream.getTracks().every((track) => track.readyState === "ended"),
+      ),
+    ),
+  ).toBe(true);
+});

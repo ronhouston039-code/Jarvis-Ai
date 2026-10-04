@@ -273,6 +273,12 @@ On iOS Safari, **KY TV** has **Turn On TV** and **Turn Off TV** controls. Create
 
 Safari cannot verify that a Shortcut exists, succeeded or changed the TV's power/network state. A reviewed handoff shows **Action Dispatched** with the requested On/Off state marked unverified. Recent Activity records **KY TV power command dispatched**, the action and a timestamp; it never assumes an Online/Offline state. With spoken replies enabled, JARVIS says “Sending power command to the TV now, Sir.” Opening Shortcuts may pause browser speech; the on-screen status remains available. After observing the TV, tap **Confirm TV is on/off** for a separately labeled **user-confirmed, not device verified** state. This local report cannot authorize Home Assistant or any server action. History is sanitized, limited to 20 entries and stored only in this browser under the authenticated account. It is separate from the backend HomeKit audit trail. Other browsers continue to use the connected Home Assistant provider or existing Connections shortcuts.
 
+### Play Vamp on iPhone
+
+Create an Apple Shortcut named **Play Vamp** that plays your chosen playlist. In iOS Safari, tap the dashboard **Play Vamp** quick action or the music card's **Review Play Vamp request** button, or say “Jarvis, play Vamp.” The review sheet's **Run Play Vamp** button opens `shortcuts://run-shortcut?name=Play%20Vamp`; Cancel sends nothing. No Apple Music developer token is required for this local Shortcut handoff.
+
+Recent Activity records **Music request dispatched: Play Vamp** with a timestamp. The music card shows **Requested — awaiting device playback confirmation.** This request does not change MusicKit's actual track or playback state. Spoken replies use “Sending the Vamp play request now, Sir,” without claiming confirmed playback. As with TV actions, browser speech can pause when iOS opens Shortcuts. These local reports are bounded, isolated to the signed-in account and retained without automatically replaying commands after reload.
+
 Files for this update:
 
 | Area | Created or modified files |
@@ -283,5 +289,6 @@ Files for this update:
 | Globe | `src/components/visualizer/DashboardHologram.tsx`, `HolographicGlobe.tsx`, `holographic-globe.css` |
 | Music | `src/components/apple-music.ts`, `apple-music.test.ts`, `dashboard/NowPlaying.tsx`, `now-playing.css` |
 | Siri TV controls | `src/components/devices/TVShortcutDialog.tsx`, `useTVShortcuts.ts`, `useTVShortcuts.test.ts`, `tv-intent.ts`, `tv-intent.test.ts` |
-| Browser checks | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts` |
+| Siri music controls | `src/components/devices/VampShortcutDialog.tsx`, `useVampShortcut.ts`, `useVampShortcut.test.ts`, `vamp-intent.ts`, `vamp-intent.test.ts` |
+| Browser checks | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts`, `vamp-shortcut.spec.ts` |
 | Documentation | `README.md` |

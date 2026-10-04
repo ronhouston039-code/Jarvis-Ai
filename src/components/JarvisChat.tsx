@@ -5,6 +5,9 @@ import { VoiceActivityDetector, wakeRequest } from "./voice/voice-activity";
 import { useTVShortcuts } from "./devices/useTVShortcuts";
 import { parseTvPowerIntent } from "./devices/tv-intent";
 import { TVShortcutDialog } from "./devices/TVShortcutDialog";
+import { useVampShortcut } from "./devices/useVampShortcut";
+import { parseVampIntent } from "./devices/vamp-intent";
+import { VampShortcutDialog } from "./devices/VampShortcutDialog";
 import { isGreetingRequest } from "../jarvis/greeting";
 import {
   JarvisSpeechPlayer,
@@ -58,6 +61,7 @@ const models = listDeepSpaceAgentModels("application");
 const model = (models.find((m) => m.id === "gpt-6-luna") ?? models[0])?.id;
 export function JarvisChat({ userId }: { userId: string }) {
   const tvShortcuts = useTVShortcuts();
+  const vampShortcut = useVampShortcut();
   const [searchParams, setSearchParams] = useSearchParams();
   const focusMode = searchParams.get("mode") === "focus";
   const focusRef = useRef(focusMode);
@@ -395,7 +399,8 @@ export function JarvisChat({ userId }: { userId: string }) {
       } else if (
         focusRef.current ||
         sessionActive.current ||
-        (tvShortcuts.supported && parseTvPowerIntent(request))
+        (tvShortcuts.supported && parseTvPowerIntent(request)) ||
+        (vampShortcut.supported && parseVampIntent(request))
       ) {
         cancelRecognition();
         sendLatest.current(request);
@@ -557,14 +562,18 @@ export function JarvisChat({ userId }: { userId: string }) {
   }, [continuousSession, listening, speaking, cancelRecognition]);
   function sendMessage(text: string) {
     const tvAction = tvShortcuts.supported ? parseTvPowerIntent(text) : null;
-    if (tvAction) {
+    const vampAction = vampShortcut.supported ? parseVampIntent(text) : null;
+    if (tvAction || vampAction) {
       endVoiceSession();
       stop();
       if (focusRef.current) exitFocus();
       setTranscript(text.trim());
       setDraft("");
-      setSpokenCaption(`Turn ${tvAction} KY TV now?`);
-      tvShortcuts.requestAction(tvAction);
+      setSpokenCaption(
+        tvAction ? `Turn ${tvAction} KY TV now?` : "Play Vamp on your iPhone?",
+      );
+      if (tvAction) tvShortcuts.requestAction(tvAction);
+      else vampShortcut.request();
       return;
     }
     if (!text.trim() || isLoading) return;
@@ -733,6 +742,14 @@ export function JarvisChat({ userId }: { userId: string }) {
   ) : null;
   return (
     <>
+      <VampShortcutDialog
+        controls={vampShortcut}
+        onDispatched={() => {
+          const dispatchReply = "Sending the Vamp play request now, Sir.";
+          if (voiceEnabled) speak(dispatchReply);
+          else setSpokenCaption(dispatchReply);
+        }}
+      />
       <TVShortcutDialog
         controls={tvShortcuts}
         onDispatched={() => {
@@ -782,6 +799,8 @@ export function JarvisChat({ userId }: { userId: string }) {
               sendMessage(prompt);
             }}
             tvShortcuts={tvShortcuts}
+            vampShortcut={vampShortcut}
+            onPlayVamp={() => sendMessage("Play Vamp.")}
             onTurnOffTV={() => sendMessage("Turn off KY TV.")}
             onTurnOnTV={() => sendMessage("Turn on KY TV.")}
             history={

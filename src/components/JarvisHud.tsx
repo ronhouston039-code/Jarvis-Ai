@@ -5,6 +5,7 @@ import { useHomeDashboard } from "./dashboard/useHomeDashboard";
 import { Modal, Button } from "./ui";
 import { spokenVersion } from "./jarvis-speech";
 import type { TVShortcutController } from "./devices/useTVShortcuts";
+import type { VampShortcutController } from "./devices/useVampShortcut";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useQuery } from "deepspace";
 import { Link } from "react-router-dom";
@@ -52,6 +53,8 @@ type Props = {
   onWakeToggle?: () => void;
   onPrompt: (prompt: string) => void;
   tvShortcuts?: TVShortcutController;
+  vampShortcut?: VampShortcutController;
+  onPlayVamp?: () => void;
   onTurnOffTV?: () => void;
   onTurnOnTV?: () => void;
   history: ReactNode;
@@ -109,6 +112,13 @@ export function JarvisHud(p: Props) {
   const [wakeConsent, setWakeConsent] = useState(false);
   const home = useHomeDashboard();
   const nativeTV = p.tvShortcuts?.supported ? p.tvShortcuts : null;
+  const nativeMusic = p.vampShortcut?.supported ? p.vampShortcut : null;
+  const shortcutActivity = [
+    ...(nativeTV?.activity ?? []),
+    ...(nativeMusic?.activity ?? []),
+  ]
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+    .slice(0, 3);
   const tvStatus = home.tv
     ? `${home.tv.online ? "Online" : "Offline"} · ${home.tv.state}`
     : home.phase === "checking"
@@ -343,10 +353,17 @@ export function JarvisHud(p: Props) {
                     <Tv />
                     <span>Turn Off TV</span>
                   </button>
-                  <Link to="/connections?tab=music">
-                    <Music />
-                    <span>Play Music</span>
-                  </Link>
+                  {nativeMusic ? (
+                    <button data-greeting-skip onClick={p.onPlayVamp}>
+                      <Music />
+                      <span>Play Vamp</span>
+                    </button>
+                  ) : (
+                    <Link to="/connections?tab=music">
+                      <Music />
+                      <span>Play Music</span>
+                    </Link>
+                  )}
                   <Link to="/connections?tab=home">
                     <Home />
                     <span>Smart Home</span>
@@ -511,7 +528,7 @@ export function JarvisHud(p: Props) {
                   Recent Activity<Link to="/personal">See all</Link>
                 </h2>
                 <div className="hud-activity-feed">
-                  {nativeTV?.activity.slice(0, 3).map((entry) => (
+                  {shortcutActivity.map((entry) => (
                     <article className="hud-shortcut-activity" key={entry.id}>
                       <h3>{entry.message}</h3>
                       <time dateTime={entry.timestamp}>
@@ -525,7 +542,10 @@ export function JarvisHud(p: Props) {
                   <HomeKitActivity compact />
                 </div>
               </section>
-              <NowPlaying />
+              <NowPlaying
+                vamp={nativeMusic ?? undefined}
+                onPlayVamp={p.onPlayVamp}
+              />
             </aside>
           </div>
           <footer className="hud-bottom jarvis-command-bar">
