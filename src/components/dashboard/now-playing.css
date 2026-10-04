@@ -170,3 +170,9 @@
     min-height: 44px;
   }
 }
+.dashboard-music-provider {
+  color: #86a5bf;
+  font-size: 0.72rem;
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}

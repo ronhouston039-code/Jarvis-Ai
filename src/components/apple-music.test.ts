@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   appleMusicArtwork,
   controlAppleMusicPlayback,
+  isVerifiedVampPlayback,
   readAppleMusicPlayback,
   readScopedAppleMusicPlayback,
+  readScopedVampPlayback,
   subscribeAppleMusicPlayback,
+  VAMP_PLAYLIST_ID,
   type MusicKitInstance,
+  type VampPlaybackObservation,
 } from "./apple-music";
 
 function mockMusic(): MusicKitInstance {
@@ -173,5 +177,191 @@ describe("authorized dashboard Apple Music playback", () => {
     );
     dispose();
     expect(music.removeEventListener).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("verified VAMP playback", () => {
+  const observedAt = Date.UTC(2026, 9, 4, 12);
+  const userId = "music-owner";
+
+  function mockVampMusic(): MusicKitInstance {
+    const music = mockMusic();
+    music.nowPlayingItem = {
+      ...music.nowPlayingItem,
+      id: "song-123",
+      container: { id: VAMP_PLAYLIST_ID, type: "playlists" },
+    };
+    return music;
+  }
+
+  function observe(music: MusicKitInstance | null) {
+    return readScopedVampPlayback(music, userId, userId, true, observedAt);
+  }
+
+  it("verifies the authorized user's active item in the exact VAMP playlist", () => {
+    const music = mockVampMusic();
+    const observation = observe(music);
+    expect(observation).toEqual({
+      userId,
+      observedAt,
+      authorized: true,
+      playing: true,
+      itemId: "song-123",
+      playlistId: VAMP_PLAYLIST_ID,
+    });
+    expect(isVerifiedVampPlayback(observation)).toBe(true);
+  });
+
+  it.each([
+    {
+      reason: "revoked authorization",
+      authorized: false,
+      sessionUserId: userId,
+      currentUserId: userId,
+      configurationAllowed: true,
+    },
+    {
+      reason: "a different current user",
+      authorized: true,
+      sessionUserId: userId,
+      currentUserId: "other-user",
+      configurationAllowed: true,
+    },
+    {
+      reason: "no current user",
+      authorized: true,
+      sessionUserId: userId,
+      currentUserId: null,
+      configurationAllowed: true,
+    },
+    {
+      reason: "no session user",
+      authorized: true,
+      sessionUserId: null,
+      currentUserId: userId,
+      configurationAllowed: true,
+    },
+    {
+      reason: "disabled configuration",
+      authorized: true,
+      sessionUserId: userId,
+      currentUserId: userId,
+      configurationAllowed: false,
+    },
+  ])("does not read private track metadata with $reason", (scope) => {
+    const music = mockVampMusic();
+    music.isAuthorized = scope.authorized;
+    const readItem = vi.fn(() => {
+      throw new Error("private metadata read");
+    });
+    Object.defineProperty(music, "nowPlayingItem", { get: readItem });
+    const observation = readScopedVampPlayback(
+      music,
+      scope.sessionUserId,
+      scope.currentUserId,
+      scope.configurationAllowed,
+      observedAt,
+    );
+    expect(observation).toBeNull();
+    expect(isVerifiedVampPlayback(observation)).toBe(false);
+    expect(readItem).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined, "true", 1])(
+    "rejects playback unless the provider reports boolean true (%s)",
+    (playing) => {
+      const music = mockVampMusic();
+      music.isPlaying = playing as MusicKitInstance["isPlaying"];
+      expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+    },
+  );
+
+  it("rejects an unavailable SDK and a queue with no active item", () => {
+    expect(observe(null)).toBeNull();
+    expect(isVerifiedVampPlayback(observe(null))).toBe(false);
+    const music = mockVampMusic();
+    music.nowPlayingItem = undefined;
+    expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+  });
+
+  it("does not infer VAMP playback from a song title or a shared song ID", () => {
+    const music = mockVampMusic();
+    music.nowPlayingItem = { id: "song-123", title: "Vamp" };
+    expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+    music.nowPlayingItem.container = {
+      id: "pl.other-playlist",
+      type: "playlists",
+    };
+    expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+    music.nowPlayingItem.container.id = `${VAMP_PLAYLIST_ID}-other`;
+    expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+  });
+
+  it.each([undefined, "", "song with spaces", "../song", "x".repeat(201), 123])(
+    "rejects a missing or malformed song ID (%s)",
+    (id) => {
+      const music = mockVampMusic();
+      music.nowPlayingItem!.id = id as string | undefined;
+      expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+    },
+  );
+
+  it.each([
+    undefined,
+    {},
+    { id: "", type: "playlists" },
+    { id: "playlist with spaces", type: "playlists" },
+    { id: "../playlist", type: "playlists" },
+    { id: "x".repeat(201), type: "playlists" },
+    { id: 123, type: "playlists" },
+    { id: VAMP_PLAYLIST_ID },
+    { id: VAMP_PLAYLIST_ID, type: "albums" },
+    { id: VAMP_PLAYLIST_ID, type: "playlist" },
+  ])("rejects an absent or invalid playlist container (%j)", (container) => {
+    const music = mockVampMusic();
+    music.nowPlayingItem!.container = container as NonNullable<
+      MusicKitInstance["nowPlayingItem"]
+    >["container"];
+    expect(isVerifiedVampPlayback(observe(music))).toBe(false);
+  });
+
+  it("only observes playback without authorizing, changing queues, or accessing APIs", () => {
+    const music = mockVampMusic();
+    const api = music.api;
+    const readApi = vi.fn(() => {
+      throw new Error("listening API access");
+    });
+    Object.defineProperty(music, "api", { get: readApi });
+    expect(isVerifiedVampPlayback(observe(music))).toBe(true);
+    expect(music.authorize).not.toHaveBeenCalled();
+    expect(music.unauthorize).not.toHaveBeenCalled();
+    expect(music.setQueue).not.toHaveBeenCalled();
+    expect(music.play).not.toHaveBeenCalled();
+    expect(music.pause).not.toHaveBeenCalled();
+    expect(readApi).not.toHaveBeenCalled();
+    expect(api.music).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { observedAt: Number.NaN },
+    { observedAt: Number.POSITIVE_INFINITY },
+    { observedAt: Number.NEGATIVE_INFINITY },
+    { observedAt: undefined },
+    { authorized: false },
+    { authorized: "true" },
+    { authorized: 1 },
+    { playing: false },
+    { playing: "true" },
+    { playing: 1 },
+    { itemId: null },
+    { itemId: "song with spaces" },
+    { playlistId: null },
+    { playlistId: "pl.other-playlist" },
+  ])("rejects invalid observations (%j)", (invalid) => {
+    const observation = {
+      ...observe(mockVampMusic()),
+      ...invalid,
+    } as VampPlaybackObservation;
+    expect(isVerifiedVampPlayback(observation)).toBe(false);
   });
 });

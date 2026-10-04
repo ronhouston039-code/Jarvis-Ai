@@ -8,11 +8,13 @@ import {
   loadMusicKit,
   readAppleMusicPlayback,
   readScopedAppleMusicPlayback,
+  readScopedVampPlayback,
   subscribeAppleMusicPlayback,
   type AppleMusicPlaybackAction,
   type MusicKitInstance,
   type AppleMusicPlayback,
 } from "../apple-music";
+import type { VampShortcutController } from "../devices/useVampShortcut";
 import "./now-playing.css";
 
 function playbackTime(seconds: number): string {
@@ -21,13 +23,16 @@ function playbackTime(seconds: number): string {
 }
 
 type NowPlayingProps = {
-  vamp?: {
-    supported: boolean;
-    status: string | null;
-    canReport: boolean;
-    confirmPlaying: () => boolean;
-    notPlaying: () => boolean;
-  };
+  vamp?: Pick<
+    VampShortcutController,
+    | "supported"
+    | "status"
+    | "canReport"
+    | "confirmPlaying"
+    | "notPlaying"
+    | "verificationSource"
+    | "observeMusicKitPlayback"
+  >;
   onPlayVamp?: () => void;
 };
 
@@ -36,6 +41,8 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
   const userId = auth.isReady && auth.isSignedIn ? auth.userId : null;
   const identity = useRef(userId);
   identity.current = userId;
+  const playbackObserver = useRef(vamp?.observeMusicKitPlayback);
+  playbackObserver.current = vamp?.observeMusicKitPlayback;
   type View = {
     userId: string | null;
     playback: AppleMusicPlayback;
@@ -84,6 +91,7 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
       }));
     };
     const clearPlayback = (nextSetup: View["setup"]) => {
+      playbackObserver.current?.(null);
       configurationAllowed = false;
       unsubscribe();
       unsubscribe = () => {};
@@ -102,7 +110,16 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
             configurationAllowed,
           ),
         });
+        playbackObserver.current?.(
+          readScopedVampPlayback(
+            music,
+            userId,
+            identity.current,
+            configurationAllowed,
+          ),
+        );
       } catch {
+        playbackObserver.current?.(null);
         patch({
           playback: readAppleMusicPlayback(null),
           message: "Apple Music playback status is unavailable.",
@@ -178,12 +195,15 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
         configurationTimer = window.setInterval(() => {
           void refreshConfiguration();
         }, 30000);
+      } else {
+        playbackObserver.current?.(null);
       }
     };
     document.addEventListener("visibilitychange", visibility);
     visibility();
     return () => {
       active = false;
+      playbackObserver.current?.(null);
       abort.abort();
       window.clearInterval(timer);
       window.clearInterval(configurationTimer);
@@ -223,6 +243,14 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
           true,
         ),
       });
+      playbackObserver.current?.(
+        readScopedVampPlayback(
+          verified,
+          requested.userId,
+          identity.current,
+          true,
+        ),
+      );
     } catch {
       patch({
         message:
@@ -245,6 +273,11 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
           : playback.authorized
             ? "No track queued"
             : "Apple Music not connected";
+  const providerStatus = hasTrack
+    ? `${playback.playing ? "Playing" : "Paused"} — ${playback.title}`
+    : setup === "available" && playback.authorized
+      ? "No active playback"
+      : unavailableLabel;
 
   return (
     <section
@@ -312,6 +345,12 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
           </div>
         )}
       </div>
+      <p
+        className="dashboard-music-provider"
+        aria-label="MusicKit playback status"
+      >
+        MusicKit: {providerStatus}
+      </p>
       {hasTrack && playback.duration > 0 && (
         <div className="dashboard-music-progress">
           <span>{playbackTime(playback.elapsed)}</span>
@@ -351,10 +390,8 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
               {vamp.status}
             </p>
           )}
-          {vamp.status?.startsWith("Playing") && (
-            <p className="dashboard-vamp-reported">
-              User reported · device playback not verified
-            </p>
+          {vamp.verificationSource && (
+            <p className="dashboard-vamp-reported">{vamp.verificationSource}</p>
           )}
           {vamp.canReport && (
             <div className="dashboard-vamp-report-actions">

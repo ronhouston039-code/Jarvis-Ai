@@ -7,6 +7,8 @@ export type MusicKitInstance = {
   isAuthorized: boolean;
   isPlaying?: boolean;
   nowPlayingItem?: {
+    id?: string;
+    container?: { id?: string; type?: string };
     title?: string;
     artistName?: string;
     artwork?: { url?: string };
@@ -192,6 +194,67 @@ export function readScopedAppleMusicPlayback(
   )
     return readAppleMusicPlayback(null);
   return readAppleMusicPlayback(music);
+}
+
+// Public playlist identity supplied by the user; this is not an authorization token.
+export const VAMP_PLAYLIST_ID = "pl.u-JPAZbAPTDzXod7v";
+export type VampPlaybackObservation = {
+  userId: string;
+  observedAt: number;
+  authorized: boolean;
+  playing: boolean;
+  itemId: string | null;
+  playlistId: string | null;
+};
+function validMusicItemId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(value)
+  );
+}
+
+/** Read the current SDK item's container, never infer its playlist from a title. */
+export function readScopedVampPlayback(
+  music: MusicKitInstance | null,
+  sessionUserId: string | null,
+  currentUserId: string | null,
+  configurationAllowed: boolean,
+  observedAt = Date.now(),
+): VampPlaybackObservation | null {
+  if (
+    !currentUserId ||
+    sessionUserId !== currentUserId ||
+    !configurationAllowed ||
+    music?.isAuthorized !== true
+  )
+    return null;
+  const item = music.nowPlayingItem;
+  const container = item?.container;
+  return {
+    userId: currentUserId,
+    observedAt,
+    authorized: true,
+    playing: music.isPlaying === true,
+    itemId: validMusicItemId(item?.id) ? item.id : null,
+    playlistId:
+      container?.type === "playlists" && validMusicItemId(container.id)
+        ? container.id
+        : null,
+  };
+}
+
+/** MusicKit only verifies this browser's playback, not native Apple Music output. */
+export function isVerifiedVampPlayback(
+  observation: VampPlaybackObservation | null,
+): boolean {
+  return (
+    !!observation &&
+    observation.authorized === true &&
+    observation.playing === true &&
+    Number.isFinite(observation.observedAt) &&
+    validMusicItemId(observation.itemId) &&
+    observation.playlistId === VAMP_PLAYLIST_ID
+  );
 }
 
 export type AppleMusicPlaybackAction = "previous" | "play" | "pause" | "next";

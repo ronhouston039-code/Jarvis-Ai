@@ -17,8 +17,8 @@ export function VampShortcutDialog({
         <p>This will ask your iPhone to start Vamp in Apple Music.</p>
         <p className="muted text-sm">
           Create a Shortcut named Play Vamp in Apple Shortcuts first. Safari
-          cannot verify device playback; dispatching will leave this request
-          awaiting device confirmation.
+          cannot verify native playback from the Shortcut handoff. Report the
+          result when you return; MusicKit playback status is shown separately.
         </p>
       </Modal.Body>
       <Modal.Footer>

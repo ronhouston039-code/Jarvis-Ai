@@ -175,11 +175,22 @@ test("iPhone Vamp playback stays requested until manually confirmed without rela
     .getByRole("button", { name: "Confirm Playing", exact: true })
     .click();
   await expect(
-    user.page.getByText("Playing: Vamp", { exact: true }),
+    user.page.getByText("Reported playing: Vamp", { exact: true }),
   ).toBeVisible();
-  const confirmed = user.page.getByText("Playback manually confirmed: Vamp", {
-    exact: true,
-  });
+  await expect(
+    user.page.getByText("User-reported — not provider verified", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    user.page.getByText("Playing: Vamp", { exact: true }),
+  ).toHaveCount(0);
+  const confirmed = user.page.getByText(
+    "User reported playback started: Vamp",
+    {
+      exact: true,
+    },
+  );
   await expect(confirmed).toBeVisible();
   const confirmedAt = await confirmed
     .locator("..")
@@ -190,10 +201,12 @@ test("iPhone Vamp playback stays requested until manually confirmed without rela
   expect(llmRequests).toBe(0);
   await user.page.reload();
   await expect(
-    user.page.getByText("Playback manually confirmed: Vamp", { exact: true }),
+    user.page.getByText("User reported playback started: Vamp", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    user.page.getByText("Playing: Vamp", {
+    user.page.getByText("Reported playing: Vamp", {
       exact: true,
     }),
   ).toBeVisible();
@@ -305,10 +318,18 @@ test("iPhone Vamp Not Playing records an unconfirmed outcome without retry or LL
   await expect(
     user.page.getByText("Playback not confirmed", { exact: true }),
   ).toBeVisible();
-  const entry = user.page.getByText("Playback not confirmed for Vamp", {
-    exact: true,
-  });
+  const entry = user.page.getByText(
+    "User reported playback did not start: Vamp",
+    {
+      exact: true,
+    },
+  );
   await expect(entry).toBeVisible();
+  await expect(
+    user.page.getByText("User-reported — not provider verified", {
+      exact: true,
+    }),
+  ).toBeVisible();
   const timestamp = await entry
     .locator("..")
     .locator("time")
