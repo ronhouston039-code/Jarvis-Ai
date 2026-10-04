@@ -18,11 +18,15 @@ import {
   Wifi,
   WifiOff,
   ChevronRight,
-  Brain,
+  Bot,
+  Zap,
+  Clock3,
 } from "lucide-react";
-import { NeuralPlexus } from "./NeuralPlexus";
+import { DashboardHologram } from "./visualizer/DashboardHologram";
+import { AudioWaveform } from "./visualizer/AudioWaveform";
 import { HudSubtitles } from "./HudSubtitles";
 import type { FocusAudioMeter } from "./focus-audio";
+import "./jarvis-dashboard.css";
 
 type Props = {
   meter: FocusAudioMeter;
@@ -91,6 +95,13 @@ function Connection() {
   );
 }
 export function JarvisHud(p: Props) {
+  const state = p.speaking
+    ? "speaking"
+    : p.listening
+      ? "listening"
+      : p.busy
+        ? "thinking"
+        : "idle";
   const { records: locations } = useQuery<{ label: string }>("locations", {
     where: { enabled: 1 },
     limit: 1,
@@ -162,9 +173,10 @@ export function JarvisHud(p: Props) {
         aria-label="Full JARVIS dashboard"
         tabIndex={0}
       >
-        <div ref={dashboard} className="hud-dashboard">
+        <div ref={dashboard} className="hud-dashboard" data-state={state}>
           <header className="hud-top">
             <div className="hud-brand">
+              <span className="hud-logo-ring" aria-hidden="true" />
               <h1>JARVIS</h1>
             </div>
             <ClockPanel />
@@ -186,13 +198,18 @@ export function JarvisHud(p: Props) {
               <button
                 className={!p.showChat ? "active" : ""}
                 onClick={p.onHome}
+                aria-label="HOME"
               >
                 <Home />
-                HOME
+                Home
               </button>
-              <button className={p.showChat ? "active" : ""} onClick={p.onChat}>
+              <button
+                className={p.showChat ? "active" : ""}
+                onClick={p.onChat}
+                aria-label="CHAT"
+              >
                 <MessageSquare />
-                CHAT
+                Chat
               </button>
               <Link to="/connections?tab=home" aria-label="SMART HOME">
                 <Tv />
@@ -212,7 +229,7 @@ export function JarvisHud(p: Props) {
               </button>
               <Link to="/settings">
                 <Settings />
-                SETTINGS
+                Settings
               </Link>
             </aside>
             <aside className="hud-support">
@@ -254,7 +271,10 @@ export function JarvisHud(p: Props) {
                 </Link>
               </section>
               <section className="hud-panel quick-panel">
-                <h2>Quick Actions</h2>
+                <h2>
+                  <Zap size={20} />
+                  Quick Actions
+                </h2>
                 <div className="quick-grid">
                   <button onClick={() => p.onPrompt("Turn off the TV.")}>
                     <Tv />
@@ -299,23 +319,18 @@ export function JarvisHud(p: Props) {
                     : "PERSONAL INTELLIGENCE · READY"}
               </div>
               <div className="hud-hologram">
-                <NeuralPlexus
-                  state={
-                    p.speaking
-                      ? "speaking"
-                      : p.listening
-                        ? "listening"
-                        : p.busy
-                          ? "thinking"
-                          : "idle"
-                  }
-                  meter={p.meter}
-                />
-                <HudSubtitles
-                  userText={p.userCaption}
-                  text={p.assistantCaption}
-                  animate={Boolean(p.speaking || p.busy)}
-                />
+                <DashboardHologram state={state} meter={p.meter} />
+                {(p.userCaption ||
+                  p.assistantCaption ||
+                  p.listening ||
+                  p.busy) && (
+                  <HudSubtitles
+                    userText={p.userCaption}
+                    text={p.assistantCaption}
+                    animate={Boolean(p.speaking || p.busy)}
+                    state={state}
+                  />
+                )}
 
                 <button
                   className="plexus-fullscreen"
@@ -331,7 +346,7 @@ export function JarvisHud(p: Props) {
             </main>
             <aside className="hud-right">
               <section className="hud-panel assistant-panel">
-                <Brain size={30} />
+                <Bot size={30} />
                 <div>
                   <h2>AI Assistant</h2>
                   <p className="assistant-state">
@@ -345,13 +360,14 @@ export function JarvisHud(p: Props) {
                         : p.busy
                           ? "Working…"
                           : serverOnline
-                            ? "Ready"
+                            ? "Online"
                             : "Checking connection"}
                   </p>
                   <button onClick={p.onChat}>
                     I’m here and ready. How can I help you today?
                   </button>
                 </div>
+                <AudioWaveform state={state} meter={p.meter} compact />
               </section>
               <section className="hud-panel location-panel">
                 <h2>
@@ -366,7 +382,7 @@ export function JarvisHud(p: Props) {
                   <div className="map-grid" />
                   <MapPin size={32} />
                 </Link>
-                <p>
+                <p className="hud-location-name">
                   {locations[0]?.data.label ??
                     "Location access is not enabled."}
                 </p>
@@ -387,13 +403,14 @@ export function JarvisHud(p: Props) {
                   <CalendarDays size={18} />
                   Upcoming Reminders{" "}
                   <Link to="/personal" aria-label="Manage reminders">
-                    +
+                    See all
                   </Link>
                 </h2>
                 {p.upcoming}
               </section>
               <section className="hud-panel hud-activity">
                 <h2>
+                  <Clock3 size={18} />
                   Recent Activity<Link to="/personal">See all</Link>
                 </h2>
                 <HomeKitActivity compact />
@@ -401,21 +418,40 @@ export function JarvisHud(p: Props) {
               <section className="hud-panel media-panel">
                 <h2>
                   <Music size={18} />
-                  Music
+                  Now Playing
                 </h2>
-                <Music size={24} />
-                <p>
-                  {devices.some((d) => d.data.kind === "music")
-                    ? "Apple Music shortcut registered"
-                    : "Apple Music · tap to connect"}
-                </p>
-                <Link className="hud-panel-action" to="/connections?tab=music">
-                  Open media controls
-                </Link>
+                <div className="hud-media-content">
+                  <Link
+                    className="hud-media-art"
+                    to="/connections?tab=music"
+                    aria-label="Choose music"
+                  >
+                    <Music size={24} />
+                  </Link>
+                  <div>
+                    <p>
+                      {devices.some((d) => d.data.kind === "music")
+                        ? "Apple Music shortcut registered"
+                        : "Apple Music · tap to connect"}
+                    </p>
+                    <Link
+                      className="hud-panel-action"
+                      to="/connections?tab=music"
+                    >
+                      Open media controls
+                    </Link>
+                  </div>
+                </div>
               </section>
             </aside>
           </div>
-          <footer className="hud-bottom">{p.composer}</footer>
+          <footer className="hud-bottom">
+            <div className="hud-command-waves" aria-hidden="true">
+              <AudioWaveform state={state} meter={p.meter} />
+              <AudioWaveform state={state} meter={p.meter} />
+            </div>
+            {p.composer}
+          </footer>
         </div>
       </div>
     </>

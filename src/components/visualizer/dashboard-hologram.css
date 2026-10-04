@@ -1,0 +1,150 @@
+.dashboard-hologram {
+  --hologram-energy: 0;
+  --hologram-bass: 0;
+  --hologram-pulse: 1;
+  position: relative;
+  width: min(490px, 100%);
+  aspect-ratio: 490 / 520;
+  flex-shrink: 0;
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.dashboard-hologram__halo {
+  position: absolute;
+  inset: 7% 4% 22%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(0 210 255 / 9%) 0%,
+    rgb(0 119 254 / 7%) 39%,
+    rgb(0 90 210 / 3%) 63%,
+    transparent 75%
+  );
+  transform: scale(var(--hologram-pulse));
+  opacity: calc(0.6 + var(--hologram-bass) * 0.4);
+}
+
+.dashboard-hologram__sphere {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 81%;
+}
+
+.dashboard-hologram__rings,
+.dashboard-hologram__orbits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dashboard-hologram__rings {
+  transform: scale(var(--hologram-pulse));
+  opacity: calc(0.83 + var(--hologram-energy) * 0.17);
+}
+
+.dashboard-hologram__plexus {
+  position: absolute;
+  inset: 28% 28%;
+  pointer-events: auto;
+}
+
+.hud-hologram .dashboard-hologram__plexus .neural-plexus {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.dashboard-hologram__orbits {
+  opacity: calc(0.8 + var(--hologram-energy) * 0.2);
+}
+
+.dashboard-hologram__outer-spin,
+.dashboard-hologram__inner-spin {
+  transform-origin: center;
+  animation: hologram-rotate 42s linear infinite;
+}
+
+.dashboard-hologram__inner-spin {
+  animation-duration: 29s;
+  animation-direction: reverse;
+}
+
+.dashboard-hologram__sparks {
+  animation: hologram-shimmer 4s ease-in-out infinite alternate;
+}
+
+.dashboard-hologram__globe {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 56%;
+  height: auto;
+  overflow: visible;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0 5px rgb(0 179 255 / 45%));
+}
+
+.dashboard-hologram__planet {
+  transform-origin: 120px 67px;
+  animation: hologram-globe-breath 5s ease-in-out infinite;
+}
+
+.dashboard-hologram[data-state="thinking"] .dashboard-hologram__outer-spin {
+  animation-duration: 9s;
+}
+
+.dashboard-hologram[data-state="thinking"] .dashboard-hologram__inner-spin {
+  animation-duration: 6s;
+}
+
+.dashboard-hologram[data-state="listening"] .dashboard-hologram__ticks,
+.dashboard-hologram[data-state="speaking"] .dashboard-hologram__ticks {
+  opacity: calc(0.6 + var(--hologram-energy) * 0.4);
+}
+
+.dashboard-hologram[data-state="speaking"] .dashboard-hologram__globe {
+  filter: drop-shadow(0 0 8px rgb(0 210 255 / 55%));
+}
+
+@keyframes hologram-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hologram-shimmer {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hologram-globe-breath {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-hologram {
+    width: min(360px, 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-hologram__outer-spin,
+  .dashboard-hologram__inner-spin,
+  .dashboard-hologram__sparks,
+  .dashboard-hologram__planet {
+    animation: none;
+  }
+}

@@ -254,3 +254,7 @@ npx deepspace test run all
 ```
 
 Normal browser tests use DeepSpace test accounts. To mock only the paid model boundary as in CI: `JARVIS_TEST_AI=1 npx deepspace test run all`. Local proxy environments also use `JARVIS_DEV_PROXY=1` and the environment's configured CA/proxy settings. No backend API, Home Assistant/Roku provider policy, confirmation, or audit authorization changed in this UI refinement.
+
+### Cinematic dashboard
+
+The dashboard uses a locally served cyan city backdrop, translucent illuminated cards, concentric orbital rings, a holographic globe, and three SVG waveforms driven by the existing local audio meter. `DashboardHologram` wraps the live particle scene only in dashboard mode; Cinematic Focus retains its uncluttered plexus. The top bar shows the current device date/time and saved location/weather, and keeps the authenticated account menu available. Connection states, reminders, activity, music availability and all action confirmations use existing live services rather than the reference image's sample data. The iPhone layout remains one column with an accessible bottom microphone; optional desktop zoom is retained.

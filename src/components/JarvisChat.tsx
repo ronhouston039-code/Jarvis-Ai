@@ -727,7 +727,7 @@ export function JarvisChat({ userId }: { userId: string }) {
                   placeholder={
                     listening
                       ? "Listening…"
-                      : "Tap the mic or type to talk to JARVIS…"
+                      : "Tap to talk or type a command…"
                   }
                   value={draft}
                   maxLength={16000}

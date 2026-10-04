@@ -235,10 +235,31 @@ test("holographic dashboard shows honest connection states and working navigatio
   users,
 }) => {
   const [a] = await users(1);
-  await a.page.setViewportSize({ width: 1440, height: 1000 });
+  await a.page.setViewportSize({ width: 1280, height: 720 });
   await a.page.goto("/home");
   await expect(a.page.locator(".hud-brand h1")).toHaveText("JARVIS");
   await expect(a.page.locator(".neural-plexus canvas")).toBeVisible();
+  const inputSpacing = await a.page.evaluate(() => {
+    const input = document.querySelector<HTMLTextAreaElement>(
+      ".hud-bottom textarea",
+    )!;
+    const mic = document
+      .querySelector(".hud-bottom .mic-button")!
+      .getBoundingClientRect();
+    const contentStart =
+      input.getBoundingClientRect().left +
+      parseFloat(getComputedStyle(input).paddingLeft);
+    return {
+      contentStart,
+      micRight: mic.right,
+      micBottom: mic.bottom,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(inputSpacing.contentStart).toBeGreaterThan(inputSpacing.micRight);
+  expect(inputSpacing.micBottom).toBeLessThanOrEqual(
+    inputSpacing.viewportHeight,
+  );
   await expect(a.page.locator(".hud-weather")).toContainText(
     "Tap to set location",
   );

@@ -1,0 +1,600 @@
+.hud-dashboard {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 0 16px 14px 0;
+  background:
+    linear-gradient(180deg, #0008195c 0%, #00071600 62%, #000a1670 100%),
+    #020b18 url("/images/jarvis-cinematic-city.webp") center bottom / cover
+      no-repeat;
+}
+.hud-dashboard::before {
+  background-size: 52px 52px;
+  opacity: 0.35;
+}
+.hud-dashboard .hud-top {
+  grid-template-columns: minmax(0, 1fr) 38px auto 180px;
+  gap: 16px;
+  height: 56px;
+  padding: 0 50px 0 30px;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, #010b1bdb, #021027ad);
+  border-bottom: 1px solid #13496a;
+}
+.hud-dashboard .hud-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hud-dashboard .hud-brand h1 {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 5px;
+  color: #4beaff;
+  text-shadow:
+    0 0 8px #00c6ff7a,
+    0 0 22px #008bff52;
+}
+.hud-logo-ring {
+  width: 25px;
+  height: 25px;
+  border: 3px solid #22e8ff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 8px #00c8ffa3,
+    inset 0 0 8px #00c8ff75;
+  flex-shrink: 0;
+}
+.hud-dashboard .hud-clock {
+  grid-column: 3;
+  grid-row: 1;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  gap: 14px;
+  white-space: nowrap;
+}
+.hud-dashboard .hud-clock strong,
+.hud-dashboard .hud-clock span {
+  color: #78c8ed;
+  font-size: 11px;
+}
+.hud-dashboard .hud-clock strong {
+  border-left: 1px solid #17628e;
+  padding-left: 14px;
+}
+.hud-dashboard .hud-header-focus {
+  grid-column: 2;
+  grid-row: 1;
+}
+.hud-dashboard .hud-weather {
+  grid-column: 4;
+  grid-row: 1;
+  padding-left: 14px;
+}
+.hud-dashboard .hud-body {
+  flex: 1;
+  grid-template-columns: 120px 260px minmax(360px, 1fr) 382px;
+  gap: 14px;
+  min-height: 550px;
+}
+.hud-dashboard .hud-menu {
+  border-radius: 0 10px 0 0;
+  background: linear-gradient(
+    180deg,
+    #001023b8 0%,
+    #00102380 48%,
+    transparent 100%
+  );
+  border-right: 1px solid #0e4f776b;
+  gap: 0;
+  padding-top: 12px;
+}
+.hud-dashboard .hud-menu button,
+.hud-dashboard .hud-menu > a {
+  padding: 12px 17px;
+  min-height: 49px;
+  color: #d5e8f4;
+  font-size: 12px;
+}
+.hud-dashboard .hud-menu svg {
+  color: #17e1fa;
+  width: 23px;
+  height: 23px;
+  filter: drop-shadow(0 0 3px #00a8da66);
+}
+.hud-dashboard .hud-menu button.active {
+  border-left: 3px solid #20f2ff;
+  background: linear-gradient(90deg, #055284dd, #072247d9);
+  box-shadow:
+    inset 0 0 18px #00aaff4d,
+    0 0 12px #009dff4d;
+}
+.hud-dashboard .hud-panel:not(.hud-clock) {
+  border-radius: 13px;
+  border: 1px solid #1373a49e;
+  background: linear-gradient(125deg, #02172cde, #021b35dc 55%, #021027e8);
+  box-shadow:
+    inset 0 0 15px #078bdb24,
+    0 0 10px #009bff12,
+    0 5px 16px #0005;
+}
+.hud-dashboard .hud-panel h2 {
+  color: #e4effb;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.hud-dashboard .hud-panel h2 > svg {
+  color: #0ee1f7;
+  filter: drop-shadow(0 0 4px #00afff52);
+  flex-shrink: 0;
+}
+.hud-dashboard .hud-panel h2 > a {
+  margin-left: auto;
+  color: #3ee4f0;
+  font-size: 10px;
+}
+.hud-dashboard .hud-support {
+  gap: 16px;
+}
+.hud-dashboard .hud-support .hud-panel {
+  padding: 14px;
+}
+.hud-dashboard .system-summary {
+  margin-bottom: 10px;
+  font-size: 10px;
+}
+.hud-dashboard .system-row,
+.hud-dashboard .system-panel .hud-connection {
+  min-height: 56px;
+  padding: 10px;
+  border-color: #0c355bb8;
+  background: linear-gradient(130deg, #062646b3, #00172ccc);
+}
+.hud-dashboard .system-row > span,
+.hud-dashboard .hud-connection > span {
+  min-width: 0;
+}
+.hud-dashboard .system-row small {
+  line-height: 1.35;
+}
+.hud-dashboard .quick-grid {
+  gap: 8px;
+}
+.hud-dashboard .quick-grid a,
+.hud-dashboard .quick-grid button {
+  min-height: 78px;
+  padding: 12px 5px;
+  gap: 9px;
+  border-radius: 10px;
+  border-color: #123f68;
+  background: linear-gradient(135deg, #052c52d9, #021b35d9);
+}
+.hud-dashboard .quick-grid svg {
+  width: 28px;
+  height: 28px;
+  color: #10deef;
+}
+.hud-dashboard .quick-panel > .hud-panel-action {
+  margin-top: 0;
+}
+.hud-dashboard .hud-main {
+  min-width: 0;
+}
+.hud-dashboard .hud-hologram {
+  min-height: 550px;
+  justify-content: center;
+  padding-top: 4px;
+  position: relative;
+}
+.hud-dashboard .hud-stage-label {
+  top: 0;
+  font-size: 6px;
+  opacity: 0.45;
+}
+.hud-hologram > .plexus-subtitles {
+  position: absolute;
+  bottom: 46px;
+  z-index: 3;
+  width: calc(100% - 32px);
+  max-width: 420px;
+  margin: 0;
+  padding: 10px 14px;
+  background: #000b18eb;
+  border-radius: 10px;
+  box-shadow: 0 0 24px #0008;
+}
+.hud-hologram > .plexus-subtitles .plexus-answer {
+  font-size: 14px;
+  max-height: 85px;
+}
+.hud-hologram > .plexus-subtitles .plexus-user {
+  font-size: 12px;
+  margin: 3px 0 6px;
+}
+.hud-hologram > .plexus-subtitles .plexus-status {
+  margin: 0 0 4px;
+  font-size: 10px;
+}
+.hud-dashboard .plexus-fullscreen {
+  position: absolute;
+  bottom: 0;
+  z-index: 4;
+  margin: 0;
+  font-size: 10px;
+  padding: 8px 12px;
+  color: #90d8ee;
+  background: #01142bb8;
+  border: 1px solid #15517a;
+  border-radius: 20px;
+}
+.hud-dashboard .hud-right {
+  gap: 8px;
+}
+.hud-dashboard .hud-right .hud-panel {
+  padding: 13px 15px;
+}
+.hud-dashboard .assistant-panel {
+  min-height: 98px;
+  gap: 12px;
+}
+.hud-dashboard .assistant-panel > svg {
+  width: 35px;
+  height: 35px;
+  color: #002544;
+  background: #11e2fc;
+  box-shadow: 0 0 9px #00caff85;
+  padding: 6px;
+  margin-top: 1px;
+}
+.hud-dashboard .assistant-panel > div {
+  min-width: 0;
+  flex: 1;
+}
+.hud-dashboard .assistant-panel button {
+  font-size: 11px;
+  line-height: 1.45;
+}
+.hud-dashboard .assistant-panel .audio-waveform {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  width: 122px;
+  height: 25px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  color: #0ce7ff;
+}
+.hud-dashboard .location-panel {
+  min-height: 96px;
+}
+.hud-dashboard .location-panel h2 {
+  margin-bottom: 6px;
+}
+.hud-dashboard .location-panel .hud-panel-action {
+  margin-top: 4px;
+}
+.hud-dashboard .location-panel .map-placeholder {
+  width: 112px;
+  height: 69px;
+  margin-top: -24px;
+  border: 1px solid #0a3d61;
+  background: linear-gradient(135deg, #063058, #041d38);
+}
+.hud-dashboard .map-grid {
+  opacity: 0.9;
+  background-size: 16px 16px;
+}
+.hud-dashboard .map-placeholder > svg {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #00e5ff;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  filter: drop-shadow(0 0 5px #00c3ff);
+}
+.hud-dashboard .hud-location-name {
+  max-width: 220px;
+  font-size: 11px;
+  margin-top: 3px;
+  color: #b8d6eb;
+}
+.hud-dashboard .location-panel small {
+  display: block;
+  font-size: 9px;
+}
+.hud-dashboard .hud-panel-action {
+  color: #72dff1;
+  font-size: 10px;
+}
+.hud-dashboard .upcoming-panel {
+  min-height: 96px;
+}
+.hud-dashboard .hud-activity {
+  height: 132px;
+  min-height: 132px;
+  overflow: hidden;
+}
+.hud-dashboard .hud-activity .personal-card {
+  max-height: 86px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.hud-dashboard .hud-activity .personal-card > div > p {
+  font-size: 11px;
+  color: #99bcd6;
+  line-height: 1.5;
+}
+.hud-dashboard .media-panel {
+  min-height: 99px;
+}
+.hud-media-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-media-art {
+  width: 49px;
+  height: 43px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #b9f8ff;
+  background:
+    linear-gradient(135deg, #01608a60, #24165790),
+    url("/images/jarvis-cinematic-city.webp") center / cover;
+  border: 1px solid #0f639a;
+}
+.hud-dashboard .media-panel p {
+  color: #b8d6eb;
+  font-size: 11px;
+}
+.hud-dashboard .media-panel .hud-panel-action {
+  margin-top: 3px;
+}
+.hud-dashboard .hud-bottom {
+  margin: 7px 0 0 10px;
+  position: relative;
+}
+.hud-dashboard .hud-bottom .composer {
+  border: 1px solid #25b9e9;
+  min-height: 73px;
+  background: linear-gradient(90deg, #031a31f0, #032141e0, #031a31f0);
+  box-shadow:
+    inset 0 0 13px #028ee533,
+    0 0 15px #00c3ff2a;
+  padding: 10px 34%;
+  gap: 10px;
+  align-items: center;
+}
+.hud-dashboard .hud-bottom .composer::before {
+  display: none;
+}
+.hud-dashboard .hud-bottom .composer textarea {
+  padding: 5px 0 5px 140px;
+  min-height: 45px;
+  font-size: 12px;
+  min-width: 0;
+  resize: none;
+  color: #e8f3ff;
+}
+.hud-dashboard .hud-bottom .composer textarea::placeholder {
+  color: #c7e7f8;
+  opacity: 1;
+}
+.hud-dashboard .hud-bottom .composer-actions {
+  gap: 4px;
+}
+.hud-dashboard .hud-bottom .composer .mic-button {
+  left: 41%;
+  width: 64px;
+  height: 64px;
+  border: 2px solid #27e7ff;
+  background: radial-gradient(circle at 50% 35%, #06679e, #023053);
+  box-shadow:
+    0 0 13px #00d2ffa3,
+    inset 0 0 12px #03a9ff5e;
+  color: #e6fcff;
+}
+.hud-dashboard .hud-bottom .mic-button svg {
+  width: 27px;
+  height: 27px;
+}
+.hud-dashboard .hud-bottom .send-button {
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  background: #06395b;
+}
+.hud-command-waves {
+  position: absolute;
+  top: 20px;
+  height: 32px;
+  left: 4%;
+  right: 4%;
+  display: flex;
+  justify-content: space-between;
+  z-index: 3;
+  pointer-events: none;
+}
+.hud-command-waves .audio-waveform {
+  width: 28%;
+  height: 100%;
+}
+.hud-dashboard .hud-bottom .connection-actions {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 4px;
+  margin: 0;
+  font-size: 10px;
+  gap: 14px;
+}
+.hud-dashboard .hud-bottom .composer-footnote {
+  display: none;
+}
+.hud-dashboard .hud-bottom .composer-area > .muted {
+  display: none;
+}
+.jarvis-dashboard-account {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 40;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 0;
+}
+.jarvis-dashboard-account > div {
+  height: 36px;
+  padding: 0;
+  gap: 0;
+}
+.jarvis-dashboard-account > div > a,
+.jarvis-dashboard-account > div > .hidden,
+.jarvis-dashboard-account > div > .flex-1,
+.jarvis-dashboard-account [aria-label="Toggle menu"],
+.jarvis-dashboard-account [data-testid="nav-user-name"],
+.jarvis-dashboard-account [aria-label="Account menu"] > svg {
+  display: none;
+}
+.jarvis-dashboard-account [aria-label="Account menu"] {
+  padding: 4px;
+  border-color: #157099;
+  background: #021a2de8;
+}
+.hud-dashboard button:focus-visible,
+.hud-dashboard a:focus-visible {
+  outline: 2px solid #36eaff;
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .hud-pan-hint {
+    position: absolute;
+    top: 76px;
+    right: 14px;
+    z-index: 30;
+    padding: 0;
+    background: transparent;
+  }
+  .hud-pan-hint > span {
+    display: none;
+  }
+  .hud-pan-hint button {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-dashboard {
+    background-size: auto 850px;
+    background-position: center 30px;
+    padding-top: 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-top {
+    grid-template-columns: 1fr auto 38px;
+    padding-right: 42px;
+    margin-bottom: 12px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-brand {
+    gap: 9px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-brand h1 {
+    font-size: 19px;
+    letter-spacing: 3px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-logo-ring {
+    width: 19px;
+    height: 19px;
+    border-width: 2px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-clock strong {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-top .hud-clock {
+    grid-column: 2;
+    gap: 2px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-top .hud-header-focus {
+    grid-column: 3;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-top .hud-weather {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-hologram {
+    min-height: 440px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-menu {
+    background: #0010257d;
+    border-radius: 10px;
+    padding: 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-menu button,
+  .hud-viewport:not(.desktop-expanded) .hud-menu > a {
+    padding: 8px;
+    min-height: 44px;
+    font-size: 11px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-menu svg {
+    width: 20px;
+    height: 20px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom {
+    margin: 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer {
+    padding: 18px 10px 10px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer textarea {
+    padding: 5px;
+    font-size: 16px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer .mic-button {
+    position: static;
+    transform: none;
+    width: 44px;
+    height: 44px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer .mic-button svg {
+    width: 22px;
+    height: 22px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer .send-button {
+    width: 38px;
+    height: 38px;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-command-waves {
+    top: 15px;
+    height: 8px;
+    left: 12%;
+    right: 12%;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-command-waves .audio-waveform {
+    width: 42%;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .composer-footnote {
+    margin: 5px 2px 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .hud-bottom .connection-actions {
+    position: static;
+    margin: 6px 4px 0;
+  }
+  .hud-viewport:not(.desktop-expanded) .assistant-panel .audio-waveform {
+    width: 95px;
+  }
+  .jarvis-dashboard-account {
+    top: 10px;
+    right: 10px;
+  }
+}
