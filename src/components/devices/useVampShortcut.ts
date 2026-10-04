@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthProfileReady } from "deepspace";
+import { useAuthProfileReady, useQuery } from "deepspace";
 import { isIOSSafari } from "./useTVShortcuts";
+import { shortcutUrl } from "../../jarvis/connections";
+import {
+  launchVampShortcut,
+  resolveVampConnection,
+  type SavedVampConnection,
+} from "./vamp-connection";
 import {
   isVerifiedVampPlayback,
   type VampPlaybackObservation,
 } from "../apple-music";
 
-export const VAMP_SHORTCUT_URL = "shortcuts://run-shortcut?name=Play%20Vamp";
 export const VAMP_SHORTCUT_LAUNCH_EVENT = "jarvis-music-shortcut-launch";
 export const VAMP_REQUEST_STATUS = "Playback requested — awaiting confirmation";
 export const VAMP_ACTIVITY_MESSAGE =
@@ -239,15 +244,22 @@ export function parseVampActivity(
     return [];
   }
 }
-/** Fixed handoff only. Completion of this call does not establish music playback. */
-export function launchVampShortcut(navigate: (url: string) => void): void {
-  navigate(VAMP_SHORTCUT_URL);
-}
 export function useVampShortcut() {
   const { userId, isSignedIn, isReady } = useAuthProfileReady({
     requireUser: true,
   });
   const identity = isReady && isSignedIn ? userId : null;
+  const connections = useQuery("device-shortcuts", {
+    where: { userId: identity ?? "__signed_out__", kind: "music", enabled: 1 },
+  });
+  const resolution = resolveVampConnection(connections.records, identity);
+  const connection =
+    connections.status === "ready" ? resolution.connection : null;
+  const connectionRef = useRef(connection);
+  connectionRef.current = connection;
+  const [reviewedConnection, setReviewedConnection] =
+    useState<SavedVampConnection | null>(null);
+  const reviewedRef = useRef<SavedVampConnection | null>(null);
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const sessionRef = useRef({ identity, epoch: 0 });
@@ -274,6 +286,19 @@ export function useVampShortcut() {
   }, []);
   const [pendingOwner, setPendingOwner] = useState<string | null>(null);
   const pendingRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Capture the first loaded selection; subsequent edits require a fresh review.
+    if (
+      identity &&
+      pendingOwner === identity &&
+      pendingRef.current === identity &&
+      !reviewedRef.current &&
+      connection
+    ) {
+      reviewedRef.current = connection;
+      setReviewedConnection(connection);
+    }
+  }, [identity, pendingOwner, connection]);
   const supported =
     typeof navigator !== "undefined" &&
     isIOSSafari({
@@ -332,11 +357,15 @@ export function useVampShortcut() {
     if (!supported || !identity || identityRef.current !== identity)
       return false;
     pendingRef.current = identity;
+    reviewedRef.current = connectionRef.current;
+    setReviewedConnection(connectionRef.current);
     setPendingOwner(identity);
     return true;
   }, [identity, supported]);
   const cancel = useCallback(() => {
     pendingRef.current = null;
+    reviewedRef.current = null;
+    setReviewedConnection(null);
     setPendingOwner(null);
   }, []);
   const addActivity = useCallback(
@@ -424,24 +453,35 @@ export function useVampShortcut() {
     return () => window.clearTimeout(timer);
   }, [live, identity, identityEpoch, stored, clearLive]);
   const launch = useCallback(() => {
+    const reviewed = reviewedRef.current;
+    const current = connectionRef.current;
     if (
       !supported ||
       !identity ||
       identityRef.current !== identity ||
-      pendingRef.current !== identity
+      pendingRef.current !== identity ||
+      !reviewed ||
+      !current ||
+      reviewed.recordId !== current.recordId ||
+      reviewed.shortcutName !== current.shortcutName
     )
       return false;
     if (navigator.userActivation && !navigator.userActivation.isActive)
       return false;
     pendingRef.current = null;
+    reviewedRef.current = null;
+    setReviewedConnection(null);
     setPendingOwner(null);
     try {
       const event = new CustomEvent(VAMP_SHORTCUT_LAUNCH_EVENT, {
         cancelable: true,
-        detail: { name: "Play Vamp", url: VAMP_SHORTCUT_URL },
+        detail: {
+          name: reviewed.shortcutName,
+          url: shortcutUrl(reviewed.shortcutName),
+        },
       });
       if (window.dispatchEvent(event))
-        launchVampShortcut((url) => window.location.assign(url));
+        launchVampShortcut(reviewed, (url) => window.location.assign(url));
     } catch {
       return false;
     }
@@ -489,6 +529,24 @@ export function useVampShortcut() {
   return {
     supported,
     pending: !!identity && pendingOwner === identity,
+    shortcutName: reviewedConnection?.shortcutName ?? null,
+    canLaunch:
+      !!identity &&
+      pendingOwner === identity &&
+      !!connection &&
+      connection.recordId === reviewedConnection?.recordId &&
+      connection.shortcutName === reviewedConnection?.shortcutName,
+    requestError:
+      connections.status === "loading"
+        ? "Loading your saved music connection…"
+        : connections.status === "error"
+          ? "Your saved music connections could not be loaded. No request was sent."
+          : resolution.error ||
+            (pendingOwner === identity &&
+            (connection?.recordId !== reviewedConnection?.recordId ||
+              connection?.shortcutName !== reviewedConnection?.shortcutName)
+              ? "The saved Play Vamp connection changed. Cancel and review it again."
+              : ""),
     ...playback,
     canReport: pendingOwner !== identity && playback.canReport,
     activity,

@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-vi.mock("deepspace", () => ({ useAuthProfileReady: vi.fn() }));
+vi.mock("deepspace", () => ({
+  useAuthProfileReady: vi.fn(),
+  useQuery: vi.fn(),
+}));
+import { launchVampShortcut, resolveVampConnection } from "./vamp-connection";
 import { VAMP_PLAYLIST_ID, type VampPlaybackObservation } from "../apple-music";
 import {
   appendVampActivity,
-  launchVampShortcut,
   parseVampActivity,
   vampShortcutStorageKey,
   VAMP_ACTIVITY_MESSAGE,
   VAMP_REQUEST_STATUS,
-  VAMP_SHORTCUT_URL,
   canReportVampPlayback,
   vampShortcutStatus,
   latestVampDispatch,
@@ -28,13 +30,42 @@ const observation: VampPlaybackObservation = {
 const requested = () =>
   appendVampActivity([], "requested", "request-1", undefined, requestTime)!;
 describe("reviewed Play Vamp shortcut", () => {
-  it("hands off only the fixed encoded shortcut URL", () => {
+  const saved = {
+    recordId: "saved-vamp",
+    data: {
+      userId: "user-a",
+      name: "Play Vamp",
+      kind: "music",
+      enabled: 1,
+      onShortcut: "Vamp on my iPhone & Music",
+      offShortcut: "Pause Music",
+    },
+  };
+  it("resolves the current owner's saved connection and exact encoded shortcut", () => {
     const navigate = vi.fn();
-    launchVampShortcut(navigate);
+    const { connection } = resolveVampConnection([saved], "user-a");
+    expect(connection).toEqual({
+      recordId: "saved-vamp",
+      shortcutName: saved.data.onShortcut,
+    });
+    launchVampShortcut(connection!, navigate);
     expect(navigate).toHaveBeenCalledExactlyOnceWith(
-      "shortcuts://run-shortcut?name=Play%20Vamp",
+      "shortcuts://run-shortcut?name=Vamp%20on%20my%20iPhone%20%26%20Music",
     );
-    expect(VAMP_SHORTCUT_URL).not.toContain("input=");
+  });
+  it("rejects other users, disabled connections, wrong kinds, duplicates and invalid names", () => {
+    for (const records of [
+      [],
+      [saved, { ...saved, recordId: "duplicate" }],
+      [{ ...saved, data: { ...saved.data, userId: "user-b" } }],
+      [{ ...saved, data: { ...saved.data, enabled: 0 } }],
+      [{ ...saved, data: { ...saved.data, kind: "tv" } }],
+      [{ ...saved, data: { ...saved.data, onShortcut: "" } }],
+      [{ ...saved, data: { ...saved.data, onShortcut: "x".repeat(151) } }],
+      [{ ...saved, data: { ...saved.data, onShortcut: "Play\nVamp" } }],
+    ])
+      expect(resolveVampConnection(records, "user-a").connection).toBeNull();
+    expect(resolveVampConnection([saved], null).connection).toBeNull();
   });
   it("reports an unverified request rather than successful playback", () => {
     expect(VAMP_REQUEST_STATUS).toBe(
@@ -48,7 +79,12 @@ describe("reviewed Play Vamp shortcut", () => {
     const navigate = vi.fn(() => {
       throw new Error("native_handoff_failed");
     });
-    expect(() => launchVampShortcut(navigate)).toThrow("native_handoff_failed");
+    expect(() =>
+      launchVampShortcut(
+        resolveVampConnection([saved], "user-a").connection!,
+        navigate,
+      ),
+    ).toThrow("native_handoff_failed");
     expect(navigate).toHaveBeenCalledTimes(1);
   });
   it("bounds stored activity and strips extra private fields", () => {

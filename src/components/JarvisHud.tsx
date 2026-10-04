@@ -32,9 +32,11 @@ import { DashboardHologram } from "./visualizer/DashboardHologram";
 import { AudioWaveform } from "./visualizer/AudioWaveform";
 import { HudSubtitles } from "./HudSubtitles";
 import type { FocusAudioMeter } from "./focus-audio";
+import type { AssistantVisualState } from "./visualizer/visual-state";
 import "./jarvis-dashboard.css";
 
 type Props = {
+  visualState: AssistantVisualState;
   meter: FocusAudioMeter;
   userCaption: string;
   assistantCaption: string;
@@ -130,13 +132,7 @@ export function JarvisHud(p: Props) {
           : home.phase === "unavailable"
             ? "Home bridge unavailable"
             : "Connect your accessories";
-  const state = p.speaking
-    ? "speaking"
-    : p.listening
-      ? "listening"
-      : p.busy
-        ? "thinking"
-        : "idle";
+  const state = p.visualState.activity;
   const { records: locations } = useQuery<{ label: string }>("locations", {
     where: { enabled: 1 },
     limit: 1,
@@ -392,14 +388,19 @@ export function JarvisHud(p: Props) {
               <div className="hud-stage-label">
                 <span className="hud-dot" />
                 <span>{p.provider} · </span>
-                {p.busy
-                  ? "PROCESSING REQUEST"
-                  : p.listening
-                    ? "VOICE INPUT ACTIVE"
-                    : "PERSONAL INTELLIGENCE · READY"}
+                <span
+                  className="hologram-live-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {p.visualState.status}
+                </span>
               </div>
               <div className="hud-hologram">
-                <DashboardHologram state={state} meter={p.meter} />
+                <DashboardHologram
+                  visualState={p.visualState}
+                  meter={p.meter}
+                />
                 {(p.userCaption ||
                   p.assistantCaption ||
                   p.listening ||
@@ -465,15 +466,11 @@ export function JarvisHud(p: Props) {
                     <span
                       className={serverOnline ? "hud-dot" : "hud-dot dim"}
                     />
-                    {p.speaking
-                      ? "Speaking…"
-                      : p.listening
-                        ? "Listening…"
-                        : p.busy
-                          ? "Working…"
-                          : serverOnline
-                            ? "Online"
-                            : "Checking connection"}
+                    {state === "idle" && p.visualState.phase === "idle"
+                      ? serverOnline
+                        ? "Online"
+                        : "Checking connection"
+                      : p.visualState.status}
                   </p>
                   <button onClick={p.onChat}>
                     {p.assistantCaption

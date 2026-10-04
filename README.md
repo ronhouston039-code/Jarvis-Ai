@@ -261,7 +261,11 @@ Normal browser tests use DeepSpace test accounts. To mock only the paid model bo
 
 The dashboard uses a locally served cyan city backdrop, translucent illuminated cards, concentric orbital rings, a holographic globe, and three SVG waveforms driven by the existing local audio meter. `DashboardHologram` wraps the live particle scene only in dashboard mode; Cinematic Focus retains its uncluttered plexus. The top bar shows the current device date/time and saved location/weather, and keeps the authenticated account menu available. Connection states, reminders, activity, music availability and all action confirmations use existing live services rather than the reference image's sample data. The iPhone layout remains one column with an accessible bottom microphone; optional desktop zoom is retained.
 
-The lower globe is a rotating Three.js wireframe with geographic silhouettes, a responsive transparent canvas, reduced-motion support and an SVG fallback. The TV status reads the authenticated Home Assistant bridge and only selects an unambiguous approved TV. **Turn Off TV** submits the user's command through the existing tool loop; exact action confirmation remains required. Direct cloud access to private Roku ECP addresses remains disabled. Header weather refreshes from the saved location every five minutes while visible and when the app returns to the foreground.
+The lower globe is a live Three.js state indicator with geographic silhouettes, orbiting rings, inward/outward particles, a glowing core and a responsive SVG fallback. A single visual-state projection of the existing voice/session and request state drives **idle**, **listening**, **thinking**, **speaking**, **action-requested** and **error-or-fallback**. Thinking indicates processing, never completion percentage. Actual analyser amplitude drives speech when available; measured silence stays still, and unavailable device-voice analysis uses a deterministic pulse only while speech is active. Approved native dispatches and streamed tool requests produce one 900ms amber pulse before returning to the current session state. Fish failures pair the muted globe with “Fish Audio unavailable — using device voice.”
+
+The globe's single sampling loop also drives the surrounding CSS rings. It cancels RAF while hidden and resumes without a rotation jump. Reduced motion disables drift, flicker, waves and scaling while preserving state color/opacity; resources, listeners and observers are released on unmount or graphics fallback. Rapid interruption follows the live listening → thinking → speaking → listening cycle without independent animation flags.
+
+The TV status reads the authenticated Home Assistant bridge and only selects an unambiguous approved TV. **Turn Off TV** submits the user's command through the existing tool loop; exact action confirmation remains required. Direct cloud access to private Roku ECP addresses remains disabled. Header weather refreshes from the saved location every five minutes while visible and when the app returns to the foreground.
 
 The **Now Playing** card reads the authorized MusicKit session's actual title, artist, artwork and progress, and sends playback controls to that session. It does not authorize automatically or read listening history. Missing configuration or authorization shows a Connections link. Apple Music requires a valid developer token and the user's Apple authorization; Home Assistant requires its separately configured bridge. The assistant never treats a dashboard button tap or queued action as verified completion.
 
@@ -275,7 +279,7 @@ Safari cannot verify that a Shortcut exists, succeeded or changed the TV's power
 
 ### Play Vamp on iPhone
 
-Create an Apple Shortcut named **Play Vamp** that plays your chosen playlist. In iOS Safari, tap the dashboard **Play Vamp** quick action or the music card's **Review Play Vamp request** button, or say “Jarvis, play Vamp.” The **Play Vamp** review sheet says “This will ask your iPhone to start Vamp in Apple Music.” **Send Play Request** opens `shortcuts://run-shortcut?name=Play%20Vamp`; Cancel sends nothing. No Apple Music developer token is required for this local Shortcut handoff.
+Use your existing enabled Apple Shortcuts music connection with display name **Play Vamp** in Connections. Its **Play shortcut name** is the exact iPhone shortcut JARVIS uses; no second configuration is created. In iOS Safari, tap the dashboard **Play Vamp** quick action or the music card's **Review Play Vamp request** button, type “Play Vamp,” or say “Jarvis, play Vamp.” The **Play Vamp** review sheet says “This will ask your iPhone to start Vamp in Apple Music” and identifies the saved shortcut. **Send Play Request** synchronously opens `shortcuts://run-shortcut?name=<encoded saved shortcut name>` in its click handler; Cancel sends nothing. Missing, disabled, ambiguous or changed connections cannot dispatch. No Apple Music developer token is required for this local Shortcut handoff.
 
 Recent Activity records **Apple Music request dispatched: Play Vamp** with the current local timestamp. The command shows **Playback requested — awaiting confirmation** and offers **Confirm Playing** and **Not Playing**. Confirm Playing sets **Reported playing: Vamp** and adds **User reported playback started: Vamp**; Not Playing sets **Playback not confirmed** and adds **User reported playback did not start: Vamp**. Both display **User-reported — not provider verified**. Reports never change the MusicKit player, relaunch the Shortcut, or replace the dispatch entry.
 
@@ -283,16 +287,47 @@ MusicKit status appears separately. Only a fresh, authorized, active browser pla
 
 MusicKit web observes its own browser player; it cannot verify audio started in the native Apple Music app by an iPhone Shortcut. Native playback usually needs the manual-result controls. Spoken replies use exactly “Sending the Vamp play request now, Sir.” Browser speech can pause when iOS opens Shortcuts. Local histories are bounded, isolated to the signed-in account and retained without automatically replaying commands after reload.
 
-Files for this update:
+### Saved music routing and live globe update
 
-| Area                   | Created or modified files                                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Persona                | `src/assistant/persona.ts`, `persona.test.ts`, `src/ai/tools.ts`                                                                                                |
-| Conversation and voice | `src/components/JarvisChat.tsx`, `focus-audio.ts`, `focus-audio.test.ts`, `voice/voice-activity.ts`, `voice/voice-activity.test.ts`, `src/pages/(app)/home.tsx` |
-| Dashboard and weather  | `src/components/JarvisHud.tsx`, `jarvis-dashboard.css`, `WeatherConnect.tsx`, `dashboard/home-dashboard.ts`, `home-dashboard.test.ts`, `useHomeDashboard.ts`    |
-| Globe                  | `src/components/visualizer/DashboardHologram.tsx`, `HolographicGlobe.tsx`, `holographic-globe.css`                                                              |
-| Music                  | `src/components/apple-music.ts`, `apple-music.test.ts`, `dashboard/NowPlaying.tsx`, `now-playing.css`                                                           |
-| Siri TV controls       | `src/components/devices/TVShortcutDialog.tsx`, `useTVShortcuts.ts`, `useTVShortcuts.test.ts`, `tv-intent.ts`, `tv-intent.test.ts`                               |
-| Siri music controls    | `src/components/devices/VampShortcutDialog.tsx`, `useVampShortcut.ts`, `useVampShortcut.test.ts`, `vamp-intent.ts`, `vamp-intent.test.ts`                       |
-| Browser checks         | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts`, `vamp-shortcut.spec.ts`                              |
-| Documentation          | `README.md`                                                                                                                                                     |
+Exact changed files for this update:
+
+```text
+README.md
+src/components/JarvisChat.tsx
+src/components/JarvisFocus.tsx
+src/components/JarvisHud.tsx
+src/components/devices/VampShortcutDialog.tsx
+src/components/devices/useVampShortcut.ts
+src/components/devices/useVampShortcut.test.ts
+src/components/devices/vamp-connection.ts
+src/components/focus-audio.ts
+src/components/focus-audio.test.ts
+src/components/jarvis-dashboard.css
+src/components/jarvis-speech.ts
+src/components/visualizer/DashboardHologram.tsx
+src/components/visualizer/HUDSubtitles.tsx
+src/components/visualizer/HolographicGlobe.tsx
+src/components/visualizer/dashboard-hologram.css
+src/components/visualizer/holographic-globe.css
+src/components/visualizer/useAssistantVisualState.ts
+src/components/visualizer/visual-state.ts
+src/components/visualizer/visual-state.test.ts
+tests/globe-states.spec.ts
+tests/helpers/vamp-connection.ts
+tests/vamp-shortcut.spec.ts
+tests/vamp-verification.spec.ts
+```
+
+Focused checks (60 unit tests; 11 music/globe browser tests):
+
+```sh
+npm run test:unit -- src/components/devices/useVampShortcut.test.ts src/components/focus-audio.test.ts src/components/visualizer/visual-state.test.ts src/components/jarvis-speech.test.ts
+npm run type-check
+npm run lint
+npm run build
+JARVIS_DEV_PROXY=1 JARVIS_TEST_AI=1 npx deepspace test run e2e --grep 'Vamp|live globe' --json
+```
+
+The browser music fixtures save a real, owned Connections record with display name **Play Vamp** and a different play shortcut name, check the existing Play link, then exercise text/voice review, synchronous handoff, cancellation, manual outcomes and independent MusicKit evidence. External playback/provider boundaries are mocked; no paid APIs or native iPhone actions run in these automated tests.
+
+Remaining iPhone-only checks: on the live Safari dashboard, type/say “Play Vamp,” verify the sheet names your existing saved shortcut, approve and observe the actual Apple Music app. Cancel must open nothing; returning to JARVIS and reporting Playing/Not Playing must stay labeled user-reported. Repeat Talk/Focus sessions and test microphone interruption, browser/device voice, Reduce Motion and background/foreground behavior on the actual phone. Browser MusicKit verification applies only to its own authorized playback, not native Shortcut playback.

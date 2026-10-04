@@ -16,10 +16,14 @@ export function VampShortcutDialog({
       <Modal.Body>
         <p>This will ask your iPhone to start Vamp in Apple Music.</p>
         <p className="muted text-sm">
-          Create a Shortcut named Play Vamp in Apple Shortcuts first. Safari
-          cannot verify native playback from the Shortcut handoff. Report the
-          result when you return; MusicKit playback status is shown separately.
+          {controls.shortcutName && (
+            <>Saved shortcut: {controls.shortcutName}. </>
+          )}
+          Safari cannot verify native playback from the Shortcut handoff. Report
+          the result when you return; MusicKit playback status is shown
+          separately.
         </p>
+        {controls.requestError && <p role="alert">{controls.requestError}</p>}
       </Modal.Body>
       <Modal.Footer>
         <Button data-greeting-skip variant="ghost" onClick={controls.cancel}>
@@ -27,6 +31,7 @@ export function VampShortcutDialog({
         </Button>
         <Button
           data-greeting-skip
+          disabled={!controls.canLaunch}
           onClick={() => {
             if (controls.launch()) onDispatched();
           }}

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { ArrowUp, Keyboard, Mic, Square, X } from "lucide-react";
 import type { FocusState } from "./FocusOrb";
+import type { AssistantVisualState } from "./visualizer/visual-state";
 import { NeuralPlexus } from "./NeuralPlexus";
 import { HudSubtitles } from "./HudSubtitles";
 import type { FocusAudioMeter } from "./focus-audio";
 import "./jarvis-focus.css";
 type Props = {
-  state: FocusState;
+  visualState: AssistantVisualState;
   meter: FocusAudioMeter;
   caption: string;
   userCaption: string;
@@ -22,6 +23,9 @@ type Props = {
   onEndSession: () => void;
 };
 export function JarvisFocus(p: Props) {
+  const state: FocusState = p.visualState.activity;
+  const visualNotice =
+    p.visualState.phase === state ? "" : p.visualState.status;
   const [keyboard, setKeyboard] = useState(false);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -39,15 +43,20 @@ export function JarvisFocus(p: Props) {
         </button>
       </header>
       <main className="focus-center">
-        <NeuralPlexus state={p.state} meter={p.meter} />
+        <NeuralPlexus state={state} meter={p.meter} />
         <div className="focus-captions">
           <HudSubtitles
-            state={p.state}
+            state={state}
             userText={p.userCaption}
-            text={p.state === "listening" ? "" : p.caption}
-            animate={p.state === "speaking" || p.state === "thinking"}
+            text={state === "listening" ? "" : p.caption}
+            animate={state === "speaking" || state === "thinking"}
           />
-          {p.error && (
+          {visualNotice && (
+            <p className="focus-error" role="status">
+              {visualNotice}
+            </p>
+          )}
+          {p.error && p.error !== visualNotice && (
             <p className="focus-error" role="alert">
               {p.error}
             </p>
@@ -72,7 +81,7 @@ export function JarvisFocus(p: Props) {
             />
             <button
               aria-label="Send Focus message"
-              disabled={!p.draft.trim() || p.state === "thinking"}
+              disabled={!p.draft.trim() || state === "thinking"}
             >
               <ArrowUp size={20} />
             </button>
@@ -85,15 +94,13 @@ export function JarvisFocus(p: Props) {
         )}
         <div className="focus-buttons">
           <button
-            className={
-              p.state === "listening" ? "focus-mic active" : "focus-mic"
-            }
+            className={state === "listening" ? "focus-mic active" : "focus-mic"}
             aria-label={
-              p.state === "listening"
+              state === "listening"
                 ? "Stop Focus listening"
                 : "Start Focus listening"
             }
-            aria-pressed={p.state === "listening"}
+            aria-pressed={state === "listening"}
             onClick={p.onMic}
             data-greeting-skip
           >
@@ -112,10 +119,10 @@ export function JarvisFocus(p: Props) {
           >
             <Keyboard size={22} />
           </button>
-          {(p.state === "speaking" || p.state === "thinking") && (
+          {(state === "speaking" || state === "thinking") && (
             <button
               aria-label={
-                p.state === "speaking"
+                state === "speaking"
                   ? "Stop Focus speech"
                   : "Stop Focus response"
               }

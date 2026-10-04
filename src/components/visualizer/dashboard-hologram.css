@@ -2,6 +2,11 @@
   --hologram-energy: 0;
   --hologram-bass: 0;
   --hologram-pulse: 1;
+  --hologram-ring-scale: 1;
+  --hologram-core: #00d2ff;
+  --hologram-node-opacity: 0.35;
+  --hologram-outer-angle: 0rad;
+  --hologram-inner-angle: 0rad;
   position: relative;
   width: min(490px, 100%);
   aspect-ratio: 490 / 520;
@@ -16,7 +21,7 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgb(0 210 255 / 9%) 0%,
+    color-mix(in srgb, var(--hologram-core) 9%, transparent) 0%,
     rgb(0 119 254 / 7%) 39%,
     rgb(0 90 210 / 3%) 63%,
     transparent 75%
@@ -41,7 +46,7 @@
 }
 
 .dashboard-hologram__rings {
-  transform: scale(var(--hologram-pulse));
+  transform: scale(calc(var(--hologram-pulse) * var(--hologram-ring-scale)));
   opacity: calc(0.83 + var(--hologram-energy) * 0.17);
 }
 
@@ -64,16 +69,15 @@
 .dashboard-hologram__outer-spin,
 .dashboard-hologram__inner-spin {
   transform-origin: center;
-  animation: hologram-rotate 42s linear infinite;
+  transform: rotate(var(--hologram-outer-angle));
 }
 
 .dashboard-hologram__inner-spin {
-  animation-duration: 29s;
-  animation-direction: reverse;
+  transform: rotate(var(--hologram-inner-angle));
 }
 
 .dashboard-hologram__sparks {
-  animation: hologram-shimmer 4s ease-in-out infinite alternate;
+  opacity: var(--hologram-node-opacity);
 }
 
 .dashboard-hologram__globe {
@@ -92,12 +96,8 @@
   animation: hologram-globe-breath 5s ease-in-out infinite;
 }
 
-.dashboard-hologram[data-state="thinking"] .dashboard-hologram__outer-spin {
-  animation-duration: 9s;
-}
-
-.dashboard-hologram[data-state="thinking"] .dashboard-hologram__inner-spin {
-  animation-duration: 6s;
+.dashboard-hologram[data-paused="true"] * {
+  animation-play-state: paused !important;
 }
 
 .dashboard-hologram[data-state="listening"] .dashboard-hologram__ticks,
@@ -107,21 +107,6 @@
 
 .dashboard-hologram[data-state="speaking"] .dashboard-hologram__globe {
   filter: drop-shadow(0 0 8px rgb(0 210 255 / 55%));
-}
-
-@keyframes hologram-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes hologram-shimmer {
-  from {
-    opacity: 0.55;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 @keyframes hologram-globe-breath {

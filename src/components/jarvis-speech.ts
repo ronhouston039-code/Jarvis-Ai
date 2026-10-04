@@ -75,7 +75,7 @@ export class JarvisSpeechPlayer {
         this.notice("Speech is unavailable. You can still read the reply.");
         return;
       }
-      this.notice("Fish Audio is unavailable. Using your device voice.");
+      this.notice("Fish Audio unavailable — using device voice.");
       const failDeviceSpeech = () => {
         if (id === this.generation) {
           this.state(false);

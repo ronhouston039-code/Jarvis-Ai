@@ -1,7 +1,14 @@
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
+import {
+  saveVampConnection,
+  SAVED_VAMP_SHORTCUT,
+  SAVED_VAMP_URL,
+  cleanupVampConnections,
+} from "./helpers/vamp-connection";
 
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
+test.afterEach(cleanupVampConnections);
 
 const VAMP_PLAYLIST_ID = "pl.u-JPAZbAPTDzXod7v";
 type TestPlayback = {
@@ -174,9 +181,7 @@ async function dispatchVamp(page: Page) {
     await page.evaluate(
       () => (window as unknown as TestMusicWindow).vampLaunches,
     ),
-  ).toEqual([
-    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
-  ]);
+  ).toEqual([{ name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL }]);
 }
 
 test("iPhone Vamp manual report stays separate from current MusicKit verification and saved history", async ({
@@ -204,6 +209,7 @@ test("iPhone Vamp manual report stays separate from current MusicKit verificatio
       json: { error: "unexpected_llm_request" },
     });
   });
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
   const card = user.page.getByRole("region", {
     name: "Now Playing",
@@ -302,9 +308,7 @@ test("iPhone Vamp manual report stays separate from current MusicKit verificatio
       calls: (window as unknown as TestMusicWindow).vampMusicCalls,
     })),
   ).toEqual({
-    launches: [
-      { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
-    ],
+    launches: [{ name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL }],
     calls: [],
   });
 
@@ -340,6 +344,7 @@ test("iPhone Vamp title or missing playlist context cannot verify and a later ma
     container: { id: "pl.unrelated", type: "playlists" },
   };
   await prepareMusic(user.page, { playing: true, item: titledVamp });
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
   const card = user.page.getByRole("region", {
     name: "Now Playing",
@@ -421,9 +426,7 @@ test("iPhone Vamp title or missing playlist context cannot verify and a later ma
       calls: (window as unknown as TestMusicWindow).vampMusicCalls,
     })),
   ).toEqual({
-    launches: [
-      { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
-    ],
+    launches: [{ name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL }],
     calls: [],
   });
 });

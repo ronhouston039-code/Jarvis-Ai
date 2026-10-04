@@ -115,7 +115,7 @@ export class FocusAudioMeter {
           ? this.speechAnalyser
           : undefined;
     if (!analyser || this.context?.state !== "running")
-      return { bass: 0, mid: 0, high: 0, level: 0 };
+      return { bass: 0, mid: 0, high: 0, level: 0, available: false };
     analyser.getByteFrequencyData(this.samples);
     const binHz = (this.context.sampleRate || 48000) / 256;
     const band = (low: number, high: number) => {
@@ -128,6 +128,7 @@ export class FocusAudioMeter {
     let sum = 0;
     for (const sample of this.samples) sum += (sample / 255) ** 2;
     return {
+      available: true,
       bass: band(20, 250),
       mid: band(250, 2000),
       high: band(2000, 9000),

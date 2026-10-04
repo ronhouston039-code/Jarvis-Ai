@@ -30,6 +30,7 @@ import { Button, Textarea } from "./ui";
 import { useStreamingChat } from "./ChatPanel.stream";
 import { authenticatedFetch } from "../jarvis/client";
 import { JarvisHud } from "./JarvisHud";
+import { useAssistantVisualState } from "./visualizer/useAssistantVisualState";
 
 type Message = {
   chatId: string;
@@ -228,6 +229,34 @@ export function JarvisChat({ userId }: { userId: string }) {
     modelId: model,
     onChatCreated: setChatId,
   });
+  const { visualState, requestAction, clearAction } = useAssistantVisualState({
+    speaking,
+    listening,
+    processing: isLoading || preparingSpeech,
+    error:
+      voiceError ||
+      (error ? "Could not complete your request. Please try again." : ""),
+  });
+  const seenToolCalls = useRef(new Set<string>());
+  useEffect(() => {
+    if (!isLoading) return;
+    for (const message of inFlight) {
+      if (message.forChatId !== chatId) continue;
+      for (const part of message.parts) {
+        if (
+          part.type !== "tool-invocation" ||
+          seenToolCalls.current.has(part.toolCallId)
+        )
+          continue;
+        seenToolCalls.current.add(part.toolCallId);
+        if (seenToolCalls.current.size > 256) {
+          const oldest = seenToolCalls.current.values().next().value;
+          if (oldest) seenToolCalls.current.delete(oldest);
+        }
+        requestAction("Requesting an action…");
+      }
+    }
+  }, [inFlight, isLoading, chatId, requestAction]);
   const ids = new Set(records.map((r) => r.recordId));
   const messages = [
     ...records.map((r) => ({ id: r.recordId, ...r.data })),
@@ -273,6 +302,7 @@ export function JarvisChat({ userId }: { userId: string }) {
   }, [isLoading, error, records, inFlight, voiceEnabled, focusMode]);
   function toggleVoice() {
     if (voiceEnabled) {
+      setVoiceError("");
       pendingSpeech.current = null;
       speaker.current?.stop();
       setSpeaking(false);
@@ -294,6 +324,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     }
   }
   function stopResponse() {
+    clearAction();
+    setVoiceError("");
     pendingSpeech.current = null;
     speaker.current?.stop();
     setSpeaking(false);
@@ -324,6 +356,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     };
   }, [cancelRecognition]);
   const endVoiceSession = useCallback(() => {
+    clearAction();
+    setVoiceError("");
     sessionActive.current = false;
     wakeActivatedUntil.current = 0;
     sessionMode.current = null;
@@ -333,7 +367,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     cancelRecognition();
     speaker.current?.stop();
     setListening(false);
-  }, [cancelRecognition]);
+  }, [cancelRecognition, clearAction]);
   async function dictate() {
     if (listening) {
       cancelRecognition();
@@ -341,6 +375,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       setListening(false);
       return;
     }
+    clearAction();
     pendingSpeech.current = null;
     if (isLoading) stop();
     speaker.current?.stop();
@@ -561,6 +596,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     };
   }, [continuousSession, listening, speaking, cancelRecognition]);
   function sendMessage(text: string) {
+    if (text.trim()) clearAction();
     const tvAction = tvShortcuts.supported ? parseTvPowerIntent(text) : null;
     const vampAction = vampShortcut.supported ? parseVampIntent(text) : null;
     if (tvAction || vampAction) {
@@ -577,6 +613,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       return;
     }
     if (!text.trim() || isLoading) return;
+    setVoiceError("");
     cancelRecognition();
     meter.current?.stopMicrophone();
     speaker.current?.stop();
@@ -616,6 +653,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     }
   }, []);
   const exitFocus = useCallback(() => {
+    clearAction();
+    setVoiceError("");
     focusRef.current = false;
     sessionActive.current = false;
     sessionMode.current = null;
@@ -631,7 +670,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       next.delete("mode");
       return next;
     });
-  }, [setSearchParams, cancelRecognition]);
+  }, [setSearchParams, cancelRecognition, clearAction]);
   function enterFocus() {
     focusRef.current = true;
     cancelRecognition();
@@ -689,19 +728,12 @@ export function JarvisChat({ userId }: { userId: string }) {
       setListening(false);
     };
   }, [focusMode, cancelRecognition]);
-  const state = speaking
-    ? "speaking"
-    : listening
-      ? "listening"
-      : isLoading || preparingSpeech
-        ? "thinking"
-        : "idle";
   const lastReply = [...messages]
     .reverse()
     .find((message) => message.role === "assistant")?.content;
   const focusView = focusMode ? (
     <JarvisFocus
-      state={state}
+      visualState={visualState}
       continuous={continuousSession}
       onEndSession={endVoiceSession}
       meter={meter.current}
@@ -745,6 +777,9 @@ export function JarvisChat({ userId }: { userId: string }) {
       <VampShortcutDialog
         controls={vampShortcut}
         onDispatched={() => {
+          requestAction(
+            "Apple Music request dispatched — playback unverified.",
+          );
           const dispatchReply = "Sending the Vamp play request now, Sir.";
           if (voiceEnabled) speak(dispatchReply);
           else setSpokenCaption(dispatchReply);
@@ -753,6 +788,9 @@ export function JarvisChat({ userId }: { userId: string }) {
       <TVShortcutDialog
         controls={tvShortcuts}
         onDispatched={() => {
+          requestAction(
+            "TV power command dispatched — device state unverified.",
+          );
           const dispatchReply = "Sending power command to the TV now, Sir.";
           if (voiceEnabled) speak(dispatchReply);
           else setSpokenCaption(dispatchReply);
@@ -762,6 +800,7 @@ export function JarvisChat({ userId }: { userId: string }) {
         focus={focusView}
         dashboard={
           <JarvisHud
+            visualState={visualState}
             speaking={speaking}
             listening={listening}
             busy={isLoading}
@@ -985,6 +1024,8 @@ export function JarvisChat({ userId }: { userId: string }) {
                     <button
                       className="read-aloud"
                       onClick={() => {
+                        clearAction();
+                        setVoiceError("");
                         speaker.current?.stop();
                         setSpeaking(false);
                       }}

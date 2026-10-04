@@ -1,15 +1,31 @@
 .holographic-globe {
+  --globe-core: #4de5ff;
+  --globe-link-opacity: 0.18;
+  position: relative;
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 5px rgb(0 191 255 / 55%));
+  filter: drop-shadow(0 0 4px rgb(0 191 255 / 40%));
   background: radial-gradient(circle, rgb(0 160 255 / 9%) 20%, transparent 64%);
 }
 
 .holographic-globe__canvas,
 .holographic-globe__fallback {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.holographic-globe__fallback[data-active="false"] {
+  display: none;
+}
+
+.holographic-globe__links {
+  fill: none;
+  stroke: var(--globe-core);
+  stroke-width: 0.55;
+  opacity: var(--globe-link-opacity);
 }
 
 .dashboard-hologram__globe-scene {

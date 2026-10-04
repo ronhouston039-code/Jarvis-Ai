@@ -1,7 +1,14 @@
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
+import {
+  saveVampConnection,
+  SAVED_VAMP_SHORTCUT,
+  SAVED_VAMP_URL,
+  cleanupVampConnections,
+} from "./helpers/vamp-connection";
 
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
+test.afterEach(cleanupVampConnections);
 
 async function prepareIPhone(page: Page, voice = false) {
   await page.addInitScript(
@@ -92,6 +99,7 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
 }) => {
   const [user] = await users(1);
   await prepareIPhone(user.page);
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
   await user.page
     .getByRole("button", { name: "Play Vamp", exact: true })
@@ -124,12 +132,12 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
     .getByRole("button", { name: "Send Play Request", exact: true })
     .click();
   expect(await launches(user.page)).toEqual([
-    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+    { name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL },
   ]);
   await expect(dialog).not.toBeVisible();
 });
 
-test("iPhone Vamp playback stays requested until manually confirmed without relaunch", async ({
+test("iPhone Play Vamp text resolves the saved connection and stays requested until manually confirmed", async ({
   users,
 }) => {
   const [user] = await users(1);
@@ -142,9 +150,14 @@ test("iPhone Vamp playback stays requested until manually confirmed without rela
       json: { error: "unexpected_llm_request" },
     });
   });
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
+  await user.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await user.page
-    .getByRole("button", { name: "Play Vamp", exact: true })
+    .getByRole("textbox", { name: "Message JARVIS", exact: true })
+    .fill("Play Vamp");
+  await user.page
+    .getByRole("button", { name: "Send message", exact: true })
     .click();
   await user.page
     .getByRole("dialog", { name: "Play Vamp" })
@@ -227,6 +240,7 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
       json: { error: "unexpected_llm_request" },
     });
   });
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
   await user.page
     .getByRole("button", { name: "Start continuous voice session" })
@@ -269,7 +283,7 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
     }),
   ).toBeVisible();
   expect(await launches(user.page)).toEqual([
-    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+    { name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL },
   ]);
   expect(llmRequests).toBe(0);
   await expect(
@@ -298,6 +312,7 @@ test("iPhone Vamp Not Playing records an unconfirmed outcome without retry or LL
       json: { error: "unexpected_llm_request" },
     });
   });
+  await saveVampConnection(user.page);
   await user.page.goto("/home");
   await user.page
     .getByRole("button", { name: "Play Vamp", exact: true })
@@ -339,7 +354,7 @@ test("iPhone Vamp Not Playing records an unconfirmed outcome without retry or LL
     user.page.getByText("Playing: Vamp", { exact: true }),
   ).toHaveCount(0);
   expect(await launches(user.page)).toEqual([
-    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+    { name: SAVED_VAMP_SHORTCUT, url: SAVED_VAMP_URL },
   ]);
   expect(llmRequests).toBe(0);
 });

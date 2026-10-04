@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef } from "react";
-import type { FocusState } from "../FocusOrb";
+import { useCallback, useEffect, useId, useRef } from "react";
 import type { FocusAudioMeter } from "../focus-audio";
 import { NeuralPlexus } from "./NeuralPlexus";
 import { HolographicGlobe } from "./HolographicGlobe";
+import type { AssistantVisualState, VisualFrame } from "./visual-state";
 import "./dashboard-hologram.css";
 
 const ticks = Array.from({ length: 120 }, (_, index) => index * 3);
@@ -17,49 +17,69 @@ const sparks = Array.from({ length: 50 }, (_, index) => {
   };
 });
 
-/** Decorative dashboard frame; speech and microphone ownership stay in the shared meter. */
+/** The globe's single sampling loop also drives the surrounding CSS rings. */
 export function DashboardHologram({
-  state,
+  visualState,
   meter,
 }: {
-  state: FocusState;
+  visualState: AssistantVisualState;
   meter: FocusAudioMeter;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const currentState = useRef(state);
+  const orbit = useRef({ previous: 0, outer: 0, inner: 0 });
   const id = useId().replace(/:/g, "");
-  useEffect(() => {
-    currentState.current = state;
-  }, [state]);
-  useEffect(() => {
+  const updateFrame = useCallback((frame: VisualFrame) => {
     const element = root.current;
     if (!element) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let frame = 0;
-    let energy = 0;
-    let bass = 0;
-    const update = () => {
-      frame = requestAnimationFrame(update);
-      if (document.hidden) return;
-      const bands = meter.bands(currentState.current);
-      energy += (bands.level - energy) * 0.16;
-      bass += (bands.bass - bass) * 0.16;
-      element.style.setProperty("--hologram-energy", energy.toFixed(3));
-      element.style.setProperty("--hologram-bass", bass.toFixed(3));
-      element.style.setProperty(
-        "--hologram-pulse",
-        (1 + (reducedMotion.matches ? 0 : bass * 0.04)).toFixed(3),
-      );
+    const now = performance.now();
+    const delta = orbit.current.previous
+      ? Math.min(0.05, (now - orbit.current.previous) / 1000)
+      : 0;
+    orbit.current.previous = now;
+    orbit.current.outer += delta * frame.ringSpeeds[0];
+    orbit.current.inner += delta * frame.ringSpeeds[1];
+    element.style.setProperty(
+      "--hologram-energy",
+      frame.nodeOpacity.toFixed(3),
+    );
+    element.style.setProperty(
+      "--hologram-bass",
+      Math.min(1, Math.max(0, (frame.coreScale - 1) * 3)).toFixed(3),
+    );
+    element.style.setProperty("--hologram-pulse", frame.coreScale.toFixed(3));
+    element.style.setProperty(
+      "--hologram-ring-scale",
+      frame.ringScale.toFixed(3),
+    );
+    element.style.setProperty("--hologram-core", frame.coreColor);
+    element.style.setProperty(
+      "--hologram-node-opacity",
+      frame.nodeOpacity.toFixed(3),
+    );
+    element.style.setProperty(
+      "--hologram-outer-angle",
+      `${orbit.current.outer.toFixed(4)}rad`,
+    );
+    element.style.setProperty(
+      "--hologram-inner-angle",
+      `${orbit.current.inner.toFixed(4)}rad`,
+    );
+  }, []);
+  useEffect(() => {
+    const visibility = () => {
+      orbit.current.previous = 0;
+      if (root.current) root.current.dataset.paused = String(document.hidden);
     };
-    frame = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(frame);
-  }, [meter]);
+    visibility();
+    document.addEventListener("visibilitychange", visibility);
+    return () => document.removeEventListener("visibilitychange", visibility);
+  }, []);
 
   return (
     <div
       ref={root}
       className="dashboard-hologram"
-      data-state={state}
+      data-state={visualState.phase}
       aria-hidden="true"
     >
       <div className="dashboard-hologram__halo" />
@@ -174,7 +194,7 @@ export function DashboardHologram({
           </g>
         </svg>
         <div className="dashboard-hologram__plexus">
-          <NeuralPlexus state={state} meter={meter} />
+          <NeuralPlexus state={visualState.activity} meter={meter} />
         </div>
         <svg
           className="dashboard-hologram__orbits"
@@ -292,7 +312,11 @@ export function DashboardHologram({
         />
       </svg>
       <div className="dashboard-hologram__globe-scene">
-        <HolographicGlobe state={state} meter={meter} />
+        <HolographicGlobe
+          visualState={visualState}
+          meter={meter}
+          onFrame={updateFrame}
+        />
       </div>
     </div>
   );

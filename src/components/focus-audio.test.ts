@@ -85,8 +85,12 @@ test("speech output passes through analyser to speakers without duplicate source
   expect(f.output.connect).toHaveBeenCalledOnce();
   expect(f.analyser.connect).toHaveBeenCalledWith(f.context.destination);
   expect(meter.level("speaking")).toBe(1);
+  expect(meter.bands("speaking").available).toBe(true);
+  f.analyser.getByteFrequencyData = (data) => data.fill(0);
+  expect(meter.bands("speaking")).toMatchObject({ available: true, level: 0 });
   meter.attachSpeech(null);
   expect(meter.level("speaking")).toBe(0);
+  expect(meter.bands("speaking").available).toBe(false);
   meter.close();
 });
 test("frequency bands distinguish low bass from high-frequency audio", async () => {

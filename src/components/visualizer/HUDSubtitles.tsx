@@ -5,11 +5,13 @@ export function HUDSubtitles({
   text,
   animate,
   state,
+  status,
 }: {
   userText: string;
   text: string;
   animate: boolean;
   state?: "idle" | "listening" | "thinking" | "speaking";
+  status?: string;
 }) {
   const [shown, setShown] = useState(0);
   const previous = useRef("");
@@ -42,13 +44,14 @@ export function HUDSubtitles({
     <div className="plexus-subtitles">
       {state && (
         <p className="plexus-status" role="status">
-          {state === "speaking"
-            ? "JARVIS IS SPEAKING…"
-            : state === "listening"
-              ? "LISTENING…"
-              : state === "thinking"
-                ? "THINKING…"
-                : "READY"}
+          {status ||
+            (state === "speaking"
+              ? "JARVIS IS SPEAKING…"
+              : state === "listening"
+                ? "LISTENING…"
+                : state === "thinking"
+                  ? "THINKING…"
+                  : "READY")}
         </p>
       )}
       {userText && <p className="plexus-user">“{userText}”</p>}
