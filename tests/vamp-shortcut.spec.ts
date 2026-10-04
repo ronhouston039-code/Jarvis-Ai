@@ -97,15 +97,23 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
     .getByRole("button", { name: "Play Vamp", exact: true })
     .click();
   const dialog = user.page.getByRole("dialog", {
-    name: "Play Vamp on your iPhone?",
+    name: "Play Vamp",
   });
   await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByText(
+      "This will ask your iPhone to start Vamp in Apple Music.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   expect(await launches(user.page)).toEqual([]);
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   expect(await launches(user.page)).toEqual([]);
   await expect(
-    user.page.getByText("Music request dispatched: Play Vamp", { exact: true }),
+    user.page.getByText("Apple Music request dispatched: Play Vamp", {
+      exact: true,
+    }),
   ).toHaveCount(0);
   await user.page
     .getByRole("button", { name: "Review Play Vamp request", exact: true })
@@ -113,7 +121,7 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
   await expect(dialog).toBeVisible();
   expect(await launches(user.page)).toEqual([]);
   await dialog
-    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .getByRole("button", { name: "Send Play Request", exact: true })
     .click();
   expect(await launches(user.page)).toEqual([
     { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
@@ -121,22 +129,33 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
   await expect(dialog).not.toBeVisible();
 });
 
-test("iPhone Vamp handoff records a timestamped request and never implies verified playback", async ({
+test("iPhone Vamp playback stays requested until manually confirmed without relaunch", async ({
   users,
 }) => {
   const [user] = await users(1);
   await prepareIPhone(user.page);
+  let llmRequests = 0;
+  await user.page.route("**/api/ai/chat", (route) => {
+    llmRequests++;
+    return route.fulfill({
+      status: 503,
+      json: { error: "unexpected_llm_request" },
+    });
+  });
   await user.page.goto("/home");
   await user.page
     .getByRole("button", { name: "Play Vamp", exact: true })
     .click();
   await user.page
-    .getByRole("dialog", { name: "Play Vamp on your iPhone?" })
-    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .getByRole("dialog", { name: "Play Vamp" })
+    .getByRole("button", { name: "Send Play Request", exact: true })
     .click();
-  const entry = user.page.getByText("Music request dispatched: Play Vamp", {
-    exact: true,
-  });
+  const entry = user.page.getByText(
+    "Apple Music request dispatched: Play Vamp",
+    {
+      exact: true,
+    },
+  );
   await expect(entry).toBeVisible();
   const timestamp = await entry
     .locator("..")
@@ -144,21 +163,42 @@ test("iPhone Vamp handoff records a timestamped request and never implies verifi
     .getAttribute("datetime");
   expect(Number.isFinite(Date.parse(timestamp ?? ""))).toBe(true);
   await expect(
-    user.page.getByText("Requested — awaiting device playback confirmation.", {
+    user.page.getByText("Playback requested — awaiting confirmation", {
       exact: true,
     }),
   ).toBeVisible();
   expect(await launches(user.page)).toHaveLength(1);
+  await expect(
+    user.page.getByText("Playing: Vamp", { exact: true }),
+  ).toHaveCount(0);
+  await user.page
+    .getByRole("button", { name: "Confirm Playing", exact: true })
+    .click();
+  await expect(
+    user.page.getByText("Playing: Vamp", { exact: true }),
+  ).toBeVisible();
+  const confirmed = user.page.getByText("Playback manually confirmed: Vamp", {
+    exact: true,
+  });
+  await expect(confirmed).toBeVisible();
+  const confirmedAt = await confirmed
+    .locator("..")
+    .locator("time")
+    .getAttribute("datetime");
+  expect(Number.isFinite(Date.parse(confirmedAt ?? ""))).toBe(true);
+  expect(await launches(user.page)).toHaveLength(1);
+  expect(llmRequests).toBe(0);
   await user.page.reload();
   await expect(
-    user.page.getByText("Music request dispatched: Play Vamp", { exact: true }),
+    user.page.getByText("Playback manually confirmed: Vamp", { exact: true }),
   ).toBeVisible();
   await expect(
-    user.page.getByText("Requested — awaiting device playback confirmation.", {
+    user.page.getByText("Playing: Vamp", {
       exact: true,
     }),
   ).toBeVisible();
   expect(await launches(user.page)).toEqual([]);
+  expect(llmRequests).toBe(0);
 });
 
 test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthful dispatch", async ({
@@ -194,13 +234,13 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
     }),
   );
   const dialog = user.page.getByRole("dialog", {
-    name: "Play Vamp on your iPhone?",
+    name: "Play Vamp",
   });
   await expect(dialog).toBeVisible();
   expect(llmRequests).toBe(0);
   expect(await launches(user.page)).toEqual([]);
   await dialog
-    .getByRole("button", { name: "Run Play Vamp", exact: true })
+    .getByRole("button", { name: "Send Play Request", exact: true })
     .click();
   await expect
     .poll(() =>
@@ -211,7 +251,7 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
     )
     .toContain("Sending the Vamp play request now, Sir.");
   await expect(
-    user.page.getByText("Requested — awaiting device playback confirmation.", {
+    user.page.getByText("Playback requested — awaiting confirmation", {
       exact: true,
     }),
   ).toBeVisible();
@@ -230,4 +270,55 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
       ),
     ),
   ).toBe(true);
+});
+
+test("iPhone Vamp Not Playing records an unconfirmed outcome without retry or LLM call", async ({
+  users,
+}) => {
+  const [user] = await users(1);
+  await prepareIPhone(user.page);
+  let llmRequests = 0;
+  await user.page.route("**/api/ai/chat", (route) => {
+    llmRequests++;
+    return route.fulfill({
+      status: 503,
+      json: { error: "unexpected_llm_request" },
+    });
+  });
+  await user.page.goto("/home");
+  await user.page
+    .getByRole("button", { name: "Play Vamp", exact: true })
+    .click();
+  await user.page
+    .getByRole("dialog", { name: "Play Vamp" })
+    .getByRole("button", { name: "Send Play Request", exact: true })
+    .click();
+  await expect(
+    user.page.getByText("Playback requested — awaiting confirmation", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await launches(user.page)).toHaveLength(1);
+  await user.page
+    .getByRole("button", { name: "Not Playing", exact: true })
+    .click();
+  await expect(
+    user.page.getByText("Playback not confirmed", { exact: true }),
+  ).toBeVisible();
+  const entry = user.page.getByText("Playback not confirmed for Vamp", {
+    exact: true,
+  });
+  await expect(entry).toBeVisible();
+  const timestamp = await entry
+    .locator("..")
+    .locator("time")
+    .getAttribute("datetime");
+  expect(Number.isFinite(Date.parse(timestamp ?? ""))).toBe(true);
+  await expect(
+    user.page.getByText("Playing: Vamp", { exact: true }),
+  ).toHaveCount(0);
+  expect(await launches(user.page)).toEqual([
+    { name: "Play Vamp", url: "shortcuts://run-shortcut?name=Play%20Vamp" },
+  ]);
+  expect(llmRequests).toBe(0);
 });

@@ -21,7 +21,13 @@ function playbackTime(seconds: number): string {
 }
 
 type NowPlayingProps = {
-  vamp?: { supported: boolean; status: string | null };
+  vamp?: {
+    supported: boolean;
+    status: string | null;
+    canReport: boolean;
+    confirmPlaying: () => boolean;
+    notPlaying: () => boolean;
+  };
   onPlayVamp?: () => void;
 };
 
@@ -344,6 +350,35 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
             <p className="dashboard-vamp-status" role="status">
               {vamp.status}
             </p>
+          )}
+          {vamp.status?.startsWith("Playing") && (
+            <p className="dashboard-vamp-reported">
+              User reported · device playback not verified
+            </p>
+          )}
+          {vamp.canReport && (
+            <div className="dashboard-vamp-report-actions">
+              <button
+                type="button"
+                data-greeting-skip
+                disabled={!userId || !vamp.canReport}
+                onClick={() => {
+                  if (userId && vamp.canReport) vamp.confirmPlaying();
+                }}
+              >
+                Confirm Playing
+              </button>
+              <button
+                type="button"
+                data-greeting-skip
+                disabled={!userId || !vamp.canReport}
+                onClick={() => {
+                  if (userId && vamp.canReport) vamp.notPlaying();
+                }}
+              >
+                Not Playing
+              </button>
+            </div>
           )}
         </div>
       )}

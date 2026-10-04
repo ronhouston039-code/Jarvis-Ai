@@ -11,10 +11,10 @@ export function VampShortcutDialog({
   return (
     <Modal open={controls.pending} onClose={controls.cancel} size="sm">
       <Modal.Header>
-        <Modal.Title>Play Vamp on your iPhone?</Modal.Title>
+        <Modal.Title>Play Vamp</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <p>Your iPhone will open the Play Vamp Siri Shortcut.</p>
+        <p>This will ask your iPhone to start Vamp in Apple Music.</p>
         <p className="muted text-sm">
           Create a Shortcut named Play Vamp in Apple Shortcuts first. Safari
           cannot verify device playback; dispatching will leave this request
@@ -31,7 +31,7 @@ export function VampShortcutDialog({
             if (controls.launch()) onDispatched();
           }}
         >
-          Run Play Vamp
+          Send Play Request
         </Button>
       </Modal.Footer>
     </Modal>

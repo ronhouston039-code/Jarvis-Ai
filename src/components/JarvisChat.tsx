@@ -570,7 +570,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       setTranscript(text.trim());
       setDraft("");
       setSpokenCaption(
-        tvAction ? `Turn ${tvAction} KY TV now?` : "Play Vamp on your iPhone?",
+        tvAction ? `Turn ${tvAction} KY TV now?` : "Review Play Vamp request.",
       );
       if (tvAction) tvShortcuts.requestAction(tvAction);
       else vampShortcut.request();

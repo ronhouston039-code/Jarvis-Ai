@@ -275,20 +275,20 @@ Safari cannot verify that a Shortcut exists, succeeded or changed the TV's power
 
 ### Play Vamp on iPhone
 
-Create an Apple Shortcut named **Play Vamp** that plays your chosen playlist. In iOS Safari, tap the dashboard **Play Vamp** quick action or the music card's **Review Play Vamp request** button, or say “Jarvis, play Vamp.” The review sheet's **Run Play Vamp** button opens `shortcuts://run-shortcut?name=Play%20Vamp`; Cancel sends nothing. No Apple Music developer token is required for this local Shortcut handoff.
+Create an Apple Shortcut named **Play Vamp** that plays your chosen playlist. In iOS Safari, tap the dashboard **Play Vamp** quick action or the music card's **Review Play Vamp request** button, or say “Jarvis, play Vamp.” The **Play Vamp** review sheet says “This will ask your iPhone to start Vamp in Apple Music.” **Send Play Request** opens `shortcuts://run-shortcut?name=Play%20Vamp`; Cancel sends nothing. No Apple Music developer token is required for this local Shortcut handoff.
 
-Recent Activity records **Music request dispatched: Play Vamp** with a timestamp. The music card shows **Requested — awaiting device playback confirmation.** This request does not change MusicKit's actual track or playback state. Spoken replies use “Sending the Vamp play request now, Sir,” without claiming confirmed playback. As with TV actions, browser speech can pause when iOS opens Shortcuts. These local reports are bounded, isolated to the signed-in account and retained without automatically replaying commands after reload.
+Recent Activity records **Apple Music request dispatched: Play Vamp** with the current local timestamp. The music card shows **Playback requested — awaiting confirmation** and offers **Confirm Playing** and **Not Playing**. Confirm Playing sets **Playing: Vamp** and logs **Playback manually confirmed: Vamp**; Not Playing sets **Playback not confirmed** and logs **Playback not confirmed for Vamp**. These are explicit user reports, distinct from device/provider verification, and never change MusicKit's actual track or playback state. Spoken replies use exactly “Sending the Vamp play request now, Sir.” As with TV actions, browser speech can pause when iOS opens Shortcuts. These local reports are bounded, isolated to the signed-in account and retained without automatically replaying commands after reload.
 
 Files for this update:
 
-| Area | Created or modified files |
-| --- | --- |
-| Persona | `src/assistant/persona.ts`, `persona.test.ts`, `src/ai/tools.ts` |
+| Area                   | Created or modified files                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Persona                | `src/assistant/persona.ts`, `persona.test.ts`, `src/ai/tools.ts`                                                                                                |
 | Conversation and voice | `src/components/JarvisChat.tsx`, `focus-audio.ts`, `focus-audio.test.ts`, `voice/voice-activity.ts`, `voice/voice-activity.test.ts`, `src/pages/(app)/home.tsx` |
-| Dashboard and weather | `src/components/JarvisHud.tsx`, `jarvis-dashboard.css`, `WeatherConnect.tsx`, `dashboard/home-dashboard.ts`, `home-dashboard.test.ts`, `useHomeDashboard.ts` |
-| Globe | `src/components/visualizer/DashboardHologram.tsx`, `HolographicGlobe.tsx`, `holographic-globe.css` |
-| Music | `src/components/apple-music.ts`, `apple-music.test.ts`, `dashboard/NowPlaying.tsx`, `now-playing.css` |
-| Siri TV controls | `src/components/devices/TVShortcutDialog.tsx`, `useTVShortcuts.ts`, `useTVShortcuts.test.ts`, `tv-intent.ts`, `tv-intent.test.ts` |
-| Siri music controls | `src/components/devices/VampShortcutDialog.tsx`, `useVampShortcut.ts`, `useVampShortcut.test.ts`, `vamp-intent.ts`, `vamp-intent.test.ts` |
-| Browser checks | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts`, `vamp-shortcut.spec.ts` |
-| Documentation | `README.md` |
+| Dashboard and weather  | `src/components/JarvisHud.tsx`, `jarvis-dashboard.css`, `WeatherConnect.tsx`, `dashboard/home-dashboard.ts`, `home-dashboard.test.ts`, `useHomeDashboard.ts`    |
+| Globe                  | `src/components/visualizer/DashboardHologram.tsx`, `HolographicGlobe.tsx`, `holographic-globe.css`                                                              |
+| Music                  | `src/components/apple-music.ts`, `apple-music.test.ts`, `dashboard/NowPlaying.tsx`, `now-playing.css`                                                           |
+| Siri TV controls       | `src/components/devices/TVShortcutDialog.tsx`, `useTVShortcuts.ts`, `useTVShortcuts.test.ts`, `tv-intent.ts`, `tv-intent.test.ts`                               |
+| Siri music controls    | `src/components/devices/VampShortcutDialog.tsx`, `useVampShortcut.ts`, `useVampShortcut.test.ts`, `vamp-intent.ts`, `vamp-intent.test.ts`                       |
+| Browser checks         | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts`, `vamp-shortcut.spec.ts`                              |
+| Documentation          | `README.md`                                                                                                                                                     |
