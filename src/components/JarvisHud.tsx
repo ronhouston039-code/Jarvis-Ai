@@ -37,6 +37,7 @@ type Props = {
   onVoice: () => void;
   onHome: () => void;
   onFocus: () => void;
+  onContinuousVoice: () => void;
   onPrompt: (prompt: string) => void;
   history: ReactNode;
   conversation: ReactNode;
@@ -94,9 +95,12 @@ export function JarvisHud(p: Props) {
     where: { enabled: 1 },
     limit: 1,
   });
-  const { records: devices } = useQuery<{ kind: string }>("device-shortcuts", {
-    where: { enabled: 1 },
-  });
+  const { records: devices } = useQuery<{ kind: string; name: string }>(
+    "device-shortcuts",
+    {
+      where: { enabled: 1 },
+    },
+  );
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   useEffect(() => {
     let active = true;
@@ -119,7 +123,10 @@ export function JarvisHud(p: Props) {
     const canvas = dashboard.current;
     if (!frame || !canvas) return;
     const update = () => {
-      const scale = expanded ? 1 : Math.min(1, frame.clientWidth / 1280);
+      const scale =
+        expanded || frame.clientWidth <= 640
+          ? 1
+          : Math.min(1, frame.clientWidth / 1280);
       canvas.style.transform = scale < 1 ? `scale(${scale})` : "none";
       frame.style.height =
         scale < 1 ? `${canvas.offsetHeight * scale}px` : "auto";
@@ -142,7 +149,7 @@ export function JarvisHud(p: Props) {
     <>
       <div className="hud-pan-hint">
         <span>
-          {expanded ? "Swipe sideways to explore" : "Full desktop dashboard"}
+          {expanded ? "Swipe sideways to explore" : "Responsive dashboard"}
         </span>
         <button onClick={() => setExpanded(!expanded)}>
           {expanded ? "Show full overview" : "Zoom dashboard"}
@@ -150,7 +157,7 @@ export function JarvisHud(p: Props) {
       </div>
       <div
         ref={viewport}
-        className="hud-viewport"
+        className={`hud-viewport ${expanded ? "desktop-expanded" : ""}`}
         role="region"
         aria-label="Full JARVIS dashboard"
         tabIndex={0}
@@ -161,6 +168,14 @@ export function JarvisHud(p: Props) {
               <h1>JARVIS</h1>
             </div>
             <ClockPanel />
+            <button
+              className="hud-header-focus"
+              aria-label="Full Screen Focus"
+              onClick={p.onFocus}
+              data-greeting-skip
+            >
+              <Maximize2 size={18} />
+            </button>
             <Link to="/connections?tab=live" className="hud-weather">
               <CloudSun size={25} />
               <WeatherSummary />
@@ -214,7 +229,8 @@ export function JarvisHud(p: Props) {
                 <Link className="system-row" to="/connections?tab=home">
                   <Tv />
                   <span>
-                    Smart devices
+                    {devices.find((d) => d.data.kind === "tv")?.data.name ||
+                      "TCL Roku TV"}
                     <small>
                       {devices.length
                         ? `${devices.length} shortcuts · state unverified`
@@ -300,12 +316,13 @@ export function JarvisHud(p: Props) {
                   text={p.assistantCaption}
                   animate={Boolean(p.speaking || p.busy)}
                 />
+
                 <button
                   className="plexus-fullscreen"
-                  onClick={p.onFocus}
+                  onClick={p.onContinuousVoice}
                   data-greeting-skip
                 >
-                  <Maximize2 size={15} /> Full Screen Focus
+                  Start continuous voice session
                 </button>
               </div>
               {p.showChat && (
@@ -356,9 +373,13 @@ export function JarvisHud(p: Props) {
                 <small>No continuous tracking.</small>
                 <Link
                   className="hud-panel-action"
-                  to="/connections?tab=location"
+                  to={
+                    locations.length
+                      ? "/connections?tab=location"
+                      : "/connections?tab=location&city=Goldsboro%2C%20NC"
+                  }
                 >
-                  {locations.length ? "Edit location" : "Add my location"}
+                  {locations.length ? "Edit location" : "Set Goldsboro, NC"}
                 </Link>
               </section>
               <section className="hud-panel upcoming-panel">

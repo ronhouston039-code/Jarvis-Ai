@@ -1,3 +1,4 @@
+import { DashboardLayout } from "./layout/DashboardLayout";
 import { JarvisFocus } from "./JarvisFocus";
 import { FocusAudioMeter } from "./focus-audio";
 import { isGreetingRequest } from "../jarvis/greeting";
@@ -63,6 +64,8 @@ export function JarvisChat({ userId }: { userId: string }) {
   const [showChat, setShowChat] = useState(false);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
+  const [continuousSession, setContinuousSession] = useState(false);
+  const sessionActive = useRef(false);
   const [voiceError, setVoiceError] = useState("");
   const [capabilities, setCapabilities] = useState<{
     llmMode: "groq" | "deepspace";
@@ -70,6 +73,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     serverTranscription: boolean;
   } | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [preparingSpeech, setPreparingSpeech] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
       return sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === "on";
@@ -85,12 +89,24 @@ export function JarvisChat({ userId }: { userId: string }) {
       (audio) => {
         meter.current?.attachSpeech(audio);
       },
+      setPreparingSpeech,
     );
   const pendingSpeech = useRef<{
     previousIds: Set<string>;
     started: boolean;
   } | null>(null);
   const speech = useRef<Recognition | null>(null);
+  const cancelRecognition = useCallback(() => {
+    const recognition = speech.current;
+    speech.current = null;
+    try {
+      recognition?.stop();
+    } catch {
+      /* A browser may have already ended recognition. */
+    }
+    meter.current?.stopMicrophone();
+    setListening(false);
+  }, []);
   useEffect(() => {
     let active = true;
     void authenticatedFetch("/api/jarvis/capabilities")
@@ -273,7 +289,10 @@ export function JarvisChat({ userId }: { userId: string }) {
   }, [records, inFlight]);
   useEffect(() => {
     const end = () => {
-      speech.current?.stop();
+      sessionActive.current = false;
+      setContinuousSession(false);
+      pendingSpeech.current = null;
+      cancelRecognition();
       meter.current?.stopMicrophone();
       setListening(false);
       speaker.current?.stop();
@@ -285,10 +304,21 @@ export function JarvisChat({ userId }: { userId: string }) {
       meter.current?.close();
       document.removeEventListener("visibilitychange", end);
     };
+  }, [cancelRecognition]);
+  const endVoiceSession = useCallback(() => {
+    sessionActive.current = false;
+    setContinuousSession(false);
+    pendingSpeech.current = null;
+    const recognition = speech.current;
+    speech.current = null;
+    recognition?.stop();
+    meter.current?.stopMicrophone();
+    speaker.current?.stop();
+    setListening(false);
   }, []);
   async function dictate() {
     if (listening) {
-      speech.current?.stop();
+      cancelRecognition();
       meter.current?.stopMicrophone();
       setListening(false);
       return;
@@ -301,6 +331,8 @@ export function JarvisChat({ userId }: { userId: string }) {
       (window as SpeechWindow).SpeechRecognition ??
       (window as SpeechWindow).webkitSpeechRecognition;
     if (!Constructor) {
+      sessionActive.current = false;
+      setContinuousSession(false);
       setVoiceError(
         "Voice dictation is unavailable in this browser. Use the keyboard instead.",
       );
@@ -319,12 +351,10 @@ export function JarvisChat({ userId }: { userId: string }) {
       setTranscript(text);
       if (!final) return;
       if (isGreetingRequest(text)) {
-        recognition.stop();
-        meter.current?.stopMicrophone();
+        cancelRecognition();
         void playGreeting();
       } else if (focusRef.current) {
-        recognition.stop();
-        meter.current?.stopMicrophone();
+        cancelRecognition();
         sendLatest.current(text);
       } else setDraft(text);
     };
@@ -335,6 +365,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     };
     recognition.onerror = (event) => {
       if (speech.current !== recognition) return;
+      sessionActive.current = false;
+      setContinuousSession(false);
       setListening(false);
       meter.current?.stopMicrophone();
       setVoiceError(
@@ -350,20 +382,24 @@ export function JarvisChat({ userId }: { userId: string }) {
     try {
       try {
         if (!(await meter.current?.startMicrophone())) {
-          setListening(false);
+          if (speech.current === recognition) setListening(false);
           return;
         }
       } catch (failure) {
         if (focusRef.current) throw failure;
         // Browser dictation can still request its own microphone on devices without Web Audio capture.
       }
-      if (speech.current !== recognition || (focusMode && !focusRef.current)) {
+      if (speech.current !== recognition) return;
+      if (focusMode && !focusRef.current) {
         meter.current?.stopMicrophone();
         setListening(false);
         return;
       }
       recognition.start();
     } catch {
+      if (speech.current !== recognition) return;
+      sessionActive.current = false;
+      setContinuousSession(false);
       meter.current?.stopMicrophone();
       setListening(false);
       setVoiceError(
@@ -371,9 +407,43 @@ export function JarvisChat({ userId }: { userId: string }) {
       );
     }
   }
+  const dictateLatest = useRef(dictate);
+  useEffect(() => {
+    dictateLatest.current = dictate;
+  });
+  useEffect(() => {
+    if (
+      !continuousSession ||
+      !focusMode ||
+      listening ||
+      speaking ||
+      preparingSpeech ||
+      isLoading ||
+      error
+    )
+      return;
+    const timer = setTimeout(() => {
+      if (sessionActive.current && !document.hidden && !pendingSpeech.current)
+        void dictateLatest.current();
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [
+    continuousSession,
+    focusMode,
+    listening,
+    speaking,
+    preparingSpeech,
+    isLoading,
+    error,
+  ]);
+  useEffect(() => {
+    if (!continuousSession) return;
+    const timer = setTimeout(endVoiceSession, 120000);
+    return () => clearTimeout(timer);
+  }, [continuousSession, transcript, endVoiceSession]);
   function sendMessage(text: string) {
     if (!text.trim() || isLoading) return;
-    speech.current?.stop();
+    cancelRecognition();
     meter.current?.stopMicrophone();
     speaker.current?.stop();
     setListening(false);
@@ -413,8 +483,10 @@ export function JarvisChat({ userId }: { userId: string }) {
   }, []);
   const exitFocus = useCallback(() => {
     focusRef.current = false;
+    sessionActive.current = false;
+    setContinuousSession(false);
     pendingSpeech.current = null;
-    speech.current?.stop();
+    cancelRecognition();
     speaker.current?.stop();
     meter.current?.close();
     setListening(false);
@@ -423,10 +495,10 @@ export function JarvisChat({ userId }: { userId: string }) {
       next.delete("mode");
       return next;
     });
-  }, [setSearchParams]);
+  }, [setSearchParams, cancelRecognition]);
   function enterFocus() {
     focusRef.current = true;
-    speech.current?.stop();
+    cancelRecognition();
     setListening(false);
     setVoiceEnabled(true);
     try {
@@ -451,275 +523,295 @@ export function JarvisChat({ userId }: { userId: string }) {
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = oldOverflow;
-      speech.current?.stop();
+      sessionActive.current = false;
+      setContinuousSession(false);
+      cancelRecognition();
       speech.current = null;
       speaker.current?.stop();
       pendingSpeech.current = null;
       meter.current?.close();
       setListening(false);
     };
-  }, [focusMode]);
-  if (focusMode) {
-    const state = speaking
-      ? "speaking"
-      : listening
-        ? "listening"
-        : isLoading
-          ? "thinking"
-          : "idle";
-    const lastReply = [...messages]
-      .reverse()
-      .find((message) => message.role === "assistant")?.content;
-    return (
-      <JarvisFocus
-        state={state}
-        meter={meter.current}
-        caption={
-          speaking
-            ? spokenCaption
-            : listening
-              ? transcript
-              : isLoading
-                ? lastReply || "Working on your request…"
-                : lastReply || ""
-        }
-        userCaption={transcript}
-        draft={draft}
-        error={
-          voiceError ||
-          (error ? "Could not complete your request. Please try again." : "")
-        }
-        onDraft={setDraft}
-        onSend={submit}
-        onMic={() => void dictate()}
-        onExit={exitFocus}
-        onStop={stopResponse}
-        onKeyboard={() => {
-          speech.current?.stop();
-          meter.current?.stopMicrophone();
-          setListening(false);
-          void enableAudio();
-        }}
-      />
-    );
-  }
-  return (
-    <JarvisHud
-      speaking={speaking}
-      listening={listening}
-      busy={isLoading}
-      onVoice={() => void dictate()}
-      onFocus={enterFocus}
+  }, [focusMode, cancelRecognition]);
+  const state = speaking
+    ? "speaking"
+    : listening
+      ? "listening"
+      : isLoading || preparingSpeech
+        ? "thinking"
+        : "idle";
+  const lastReply = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant")?.content;
+  const focusView = focusMode ? (
+    <JarvisFocus
+      state={state}
+      continuous={continuousSession}
+      onEndSession={endVoiceSession}
       meter={meter.current}
-      userCaption={transcript}
-      assistantCaption={
+      caption={
         speaking
           ? spokenCaption
-          : [...messages].reverse().find((m) => m.role === "assistant")
-              ?.content || ""
+          : listening
+            ? transcript
+            : isLoading
+              ? lastReply || "Working on your request…"
+              : lastReply || ""
       }
-      provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
-      showChat={showChat}
-      onHome={() => setShowChat(false)}
-      onChat={() => setShowChat(true)}
-      onPrompt={(prompt) => {
-        setDraft(prompt);
+      userCaption={transcript}
+      draft={draft}
+      error={
+        voiceError ||
+        (error ? "Could not complete your request. Please try again." : "")
+      }
+      onDraft={setDraft}
+      onSend={submit}
+      onMic={() => {
+        if (listening && sessionActive.current) endVoiceSession();
+        else void dictate();
       }}
-      history={
-        <div className="conversation-rail">
-          <div className="rail-title">YOUR SPACE</div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              stopResponse();
-              setChatId(null);
-              setShowChat(false);
-            }}
-          >
-            <Plus size={16} /> New conversation
-          </Button>
-          <p className="rail-label">RECENT CONVERSATIONS</p>
-          {chats.map((c) => (
-            <button
-              key={c.recordId}
-              onClick={() => {
-                stopResponse();
-                setChatId(c.recordId);
-                setShowChat(true);
-              }}
-              className={`history-item ${chatId === c.recordId ? "selected" : ""}`}
-            >
-              <MessageSquare size={15} />
-              <span>{c.data.title || "Conversation"}</span>
-            </button>
-          ))}
-          {!chats.length && (
-            <p className="muted text-sm">
-              Your conversations will appear here.
-            </p>
-          )}
-          <div className="rail-note">
-            <span className="status-dot" /> Private to your account
-            <br />
-            <small>Built to listen. Ready to help.</small>
-          </div>
-        </div>
-      }
-      upcoming={
-        <>
-          {reminders.length ? (
-            reminders.map((r) => (
-              <div className="hud-reminder" key={r.recordId}>
-                <span>{r.data.title}</span>
-                <small>
-                  {new Date(r.data.dueAt).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </small>
-              </div>
-            ))
-          ) : (
-            <p className="hud-empty">
-              No scheduled reminders.
-              <br />
-              <Link to="/personal">Add your first reminder →</Link>
-            </p>
-          )}
-        </>
-      }
-      conversation={
-        <div className="message-list" aria-live="polite">
-          {messages.map((m) => (
-            <article key={m.id} className={`message ${m.role}`}>
-              <div className="message-label">
-                {m.role === "user" ? "YOU" : "JARVIS"}
-              </div>
-              <div className="message-content">
-                <ReactMarkdown>
-                  {m.content || "Working on your request…"}
-                </ReactMarkdown>
-              </div>
-              {m.role === "assistant" && m.content && (
-                <button
-                  className="read-aloud"
-                  aria-label="Read response aloud"
-                  disabled={speaking}
-                  onClick={() => void speak(m.content)}
-                >
-                  <Volume2 size={15} /> Listen
-                </button>
-              )}
-            </article>
-          ))}
-          {!messages.length && (
-            <div className="hud-chat-empty">
-              <MessageSquare size={28} />
-              <h2>Conversation channel open.</h2>
-              <p>Send a message below to begin.</p>
-            </div>
-          )}
-          <div ref={bottom} />
-        </div>
-      }
-      composer={
-        <div className="composer-area">
-          {(error || voiceError) && (
-            <p role="alert" className="chat-error">
-              {error instanceof Error
-                ? "JARVIS could not complete that response. Please try again."
-                : error || voiceError}
-            </p>
-          )}
-          <div className="composer">
-            <Textarea
-              aria-label="Message JARVIS"
-              placeholder={
-                listening
-                  ? "Listening…"
-                  : "Tap the mic or type to talk to JARVIS…"
-              }
-              value={draft}
-              maxLength={16000}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing
-                ) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-            />
-            <div className="composer-actions">
-              <button
-                data-greeting-skip
-                className={`mic-button ${listening ? "recording" : ""}`}
-                aria-label={listening ? "Stop listening" : "Start voice input"}
-                onClick={dictate}
-              >
-                <Mic size={21} />
-              </button>
-              {isLoading ? (
-                <button
-                  className="send-button"
-                  aria-label="Stop response"
-                  onClick={stopResponse}
-                >
-                  <Square size={17} />
-                </button>
-              ) : (
-                <button
-                  className="send-button"
-                  aria-label="Send message"
-                  disabled={!draft.trim()}
-                  onClick={submit}
-                >
-                  <ArrowUp size={21} />
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="connection-actions">
-            <button
-              className="read-aloud"
-              data-greeting-skip
-              aria-pressed={voiceEnabled}
-              onClick={toggleVoice}
-            >
-              <Volume2 size={16} />{" "}
-              {voiceEnabled ? "Voice on · turn off" : "Voice off · turn on"}
-            </button>
-            {speaking && <p role="status">Jarvis is speaking…</p>}
-            {speaking && (
-              <button
-                className="read-aloud"
+      onExit={exitFocus}
+      onStop={stopResponse}
+      onKeyboard={() => {
+        sessionActive.current = false;
+        setContinuousSession(false);
+        cancelRecognition();
+        meter.current?.stopMicrophone();
+        setListening(false);
+        void enableAudio();
+      }}
+    />
+  ) : null;
+  return (
+    <DashboardLayout
+      focus={focusView}
+      dashboard={
+        <JarvisHud
+          speaking={speaking}
+          listening={listening}
+          busy={isLoading}
+          onVoice={() => void dictate()}
+          onFocus={enterFocus}
+          onContinuousVoice={() => {
+            enterFocus();
+            sessionActive.current = true;
+            setContinuousSession(true);
+            void dictate();
+          }}
+          meter={meter.current}
+          userCaption={transcript}
+          assistantCaption={
+            speaking
+              ? spokenCaption
+              : [...messages].reverse().find((m) => m.role === "assistant")
+                  ?.content || ""
+          }
+          provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
+          showChat={showChat}
+          onHome={() => setShowChat(false)}
+          onChat={() => setShowChat(true)}
+          onPrompt={(prompt) => {
+            setDraft(prompt);
+          }}
+          history={
+            <div className="conversation-rail">
+              <div className="rail-title">YOUR SPACE</div>
+              <Button
+                variant="outline"
                 onClick={() => {
-                  speaker.current?.stop();
-                  setSpeaking(false);
+                  stopResponse();
+                  setChatId(null);
+                  setShowChat(false);
                 }}
               >
-                Stop speaking
-              </button>
-            )}
-          </div>
-          <p className="muted text-sm">
-            {voiceEnabled
-              ? "New replies will be spoken. Keep JARVIS open and your media volume up."
-              : "Turn voice on to hear replies automatically, or tap Listen beneath a reply."}
-          </p>
+                <Plus size={16} /> New conversation
+              </Button>
+              <p className="rail-label">RECENT CONVERSATIONS</p>
+              {chats.map((c) => (
+                <button
+                  key={c.recordId}
+                  onClick={() => {
+                    stopResponse();
+                    setChatId(c.recordId);
+                    setShowChat(true);
+                  }}
+                  className={`history-item ${chatId === c.recordId ? "selected" : ""}`}
+                >
+                  <MessageSquare size={15} />
+                  <span>{c.data.title || "Conversation"}</span>
+                </button>
+              ))}
+              {!chats.length && (
+                <p className="muted text-sm">
+                  Your conversations will appear here.
+                </p>
+              )}
+              <div className="rail-note">
+                <span className="status-dot" /> Private to your account
+                <br />
+                <small>Built to listen. Ready to help.</small>
+              </div>
+            </div>
+          }
+          upcoming={
+            <>
+              {reminders.length ? (
+                reminders.map((r) => (
+                  <div className="hud-reminder" key={r.recordId}>
+                    <span>{r.data.title}</span>
+                    <small>
+                      {new Date(r.data.dueAt).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className="hud-empty">
+                  No scheduled reminders.
+                  <br />
+                  <Link to="/personal">Add your first reminder →</Link>
+                </p>
+              )}
+            </>
+          }
+          conversation={
+            <div className="message-list" aria-live="polite">
+              {messages.map((m) => (
+                <article key={m.id} className={`message ${m.role}`}>
+                  <div className="message-label">
+                    {m.role === "user" ? "YOU" : "JARVIS"}
+                  </div>
+                  <div className="message-content">
+                    <ReactMarkdown>
+                      {m.content || "Working on your request…"}
+                    </ReactMarkdown>
+                  </div>
+                  {m.role === "assistant" && m.content && (
+                    <button
+                      className="read-aloud"
+                      aria-label="Read response aloud"
+                      disabled={speaking}
+                      onClick={() => void speak(m.content)}
+                    >
+                      <Volume2 size={15} /> Listen
+                    </button>
+                  )}
+                </article>
+              ))}
+              {!messages.length && (
+                <div className="hud-chat-empty">
+                  <MessageSquare size={28} />
+                  <h2>Conversation channel open.</h2>
+                  <p>Send a message below to begin.</p>
+                </div>
+              )}
+              <div ref={bottom} />
+            </div>
+          }
+          composer={
+            <div className="composer-area">
+              {(error || voiceError) && (
+                <p role="alert" className="chat-error">
+                  {error instanceof Error
+                    ? "JARVIS could not complete that response. Please try again."
+                    : error || voiceError}
+                </p>
+              )}
+              <div className="composer">
+                <Textarea
+                  aria-label="Message JARVIS"
+                  placeholder={
+                    listening
+                      ? "Listening…"
+                      : "Tap the mic or type to talk to JARVIS…"
+                  }
+                  value={draft}
+                  maxLength={16000}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing
+                    ) {
+                      e.preventDefault();
+                      submit();
+                    }
+                  }}
+                />
+                <div className="composer-actions">
+                  <button
+                    data-greeting-skip
+                    className={`mic-button ${listening ? "recording" : ""}`}
+                    aria-label={
+                      listening ? "Stop listening" : "Start voice input"
+                    }
+                    onClick={dictate}
+                  >
+                    <Mic size={21} />
+                  </button>
+                  {isLoading ? (
+                    <button
+                      className="send-button"
+                      aria-label="Stop response"
+                      onClick={stopResponse}
+                    >
+                      <Square size={17} />
+                    </button>
+                  ) : (
+                    <button
+                      className="send-button"
+                      aria-label="Send message"
+                      disabled={!draft.trim()}
+                      onClick={submit}
+                    >
+                      <ArrowUp size={21} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="connection-actions">
+                <button
+                  className="read-aloud"
+                  data-greeting-skip
+                  aria-pressed={voiceEnabled}
+                  onClick={toggleVoice}
+                >
+                  <Volume2 size={16} />{" "}
+                  {voiceEnabled ? "Voice on · turn off" : "Voice off · turn on"}
+                </button>
+                {speaking && <p role="status">Jarvis is speaking…</p>}
+                {speaking && (
+                  <button
+                    className="read-aloud"
+                    onClick={() => {
+                      speaker.current?.stop();
+                      setSpeaking(false);
+                    }}
+                  >
+                    Stop speaking
+                  </button>
+                )}
+              </div>
+              <p className="muted text-sm">
+                {voiceEnabled
+                  ? "New replies will be spoken. Keep JARVIS open and your media volume up."
+                  : "Turn voice on to hear replies automatically, or tap Listen beneath a reply."}
+              </p>
 
-          <p className="composer-footnote">
-            {listening
-              ? "Listening once. Your transcript appears here before you send."
-              : "Tap the mic to talk · Shift + Enter for a new line"}
-            <span>Powered by DeepSpace</span>
-          </p>
-        </div>
+              <p className="composer-footnote">
+                {listening
+                  ? "Listening once. Your transcript appears here before you send."
+                  : "Tap the mic to talk · Shift + Enter for a new line"}
+                <span>Powered by DeepSpace</span>
+              </p>
+            </div>
+          }
+        />
       }
     />
   );

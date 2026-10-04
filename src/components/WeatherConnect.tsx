@@ -37,7 +37,11 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [prompt, setPrompt] = useState(false);
   const [cityMode, setCityMode] = useState(false);
-  const [city, setCity] = useState("");
+  const [city, setCity] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get("city")?.slice(0, 120) ??
+      "",
+  );
   const [places, setPlaces] = useState<Place[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");

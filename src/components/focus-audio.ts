@@ -11,7 +11,7 @@ export class FocusAudioMeter {
     HTMLAudioElement,
     MediaElementAudioSourceNode
   >();
-  private samples = new Uint8Array(512);
+  private samples = new Uint8Array(128);
   private generation = 0;
   async enable(): Promise<void> {
     if (!this.context || this.context.state === "closed") {
@@ -48,7 +48,7 @@ export class FocusAudioMeter {
     }
     this.microphone = stream;
     this.micAnalyser = this.context.createAnalyser();
-    this.micAnalyser.fftSize = 1024;
+    this.micAnalyser.fftSize = 256;
     this.micAnalyser.smoothingTimeConstant = 0.65;
     this.micSource = this.context.createMediaStreamSource(stream);
     this.micSource.connect(this.micAnalyser); // No destination connection: prevents microphone feedback.
@@ -71,12 +71,14 @@ export class FocusAudioMeter {
     this.speechAnalyser = undefined;
     this.speechElement = undefined;
     if (!audio || !this.context || this.context.state !== "running") return;
+    let source: MediaElementAudioSourceNode | undefined;
+    let analyser: AnalyserNode | undefined;
     try {
-      const source =
+      source =
         this.sources.get(audio) ?? this.context.createMediaElementSource(audio);
       this.sources.set(audio, source);
-      const analyser = this.context.createAnalyser();
-      analyser.fftSize = 1024;
+      analyser = this.context.createAnalyser();
+      analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.65;
       source.connect(analyser);
       analyser.connect(this.context.destination);
@@ -84,7 +86,19 @@ export class FocusAudioMeter {
       this.speechAnalyser = analyser;
       this.speechElement = audio;
     } catch {
-      /* Leave playback available when the browser cannot attach an analyser. */
+      // A captured media element no longer plays through its original output.
+      // Bypass the failed analysis graph so speech remains audible.
+      analyser?.disconnect();
+      if (source) {
+        source.disconnect();
+        try {
+          source.connect(this.context.destination);
+          this.speechSource = source;
+          this.speechElement = audio;
+        } catch {
+          /* A closed or unsupported audio context cannot restore this route. */
+        }
+      }
     }
   }
   bands(kind: "listening" | "speaking" | "idle" | "thinking") {
@@ -97,7 +111,7 @@ export class FocusAudioMeter {
     if (!analyser || this.context?.state !== "running")
       return { bass: 0, mid: 0, high: 0, level: 0 };
     analyser.getByteFrequencyData(this.samples);
-    const binHz = (this.context.sampleRate || 48000) / 1024;
+    const binHz = (this.context.sampleRate || 48000) / 256;
     const band = (low: number, high: number) => {
       const start = Math.max(1, Math.ceil(low / binHz));
       const end = Math.min(this.samples.length, Math.ceil(high / binHz));

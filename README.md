@@ -230,6 +230,27 @@ The projected particle sphere uses local Web Audio frequency analysis for microp
 
 ### 3D neural plexus and HUD captions
 
-The dashboard and Focus Mode now share a Three.js/WebGL constellation with 220 nodes, a cyan-white sprite bloom, dynamically colored proximity links, bounded organic drift, pointer tilt and four conversation states. The audio meter exposes separate 20–250 Hz bass, 250–2,000 Hz mid and 2,000–9,000 Hz high bands. Bass expands the constellation/core; mids and highs brighten links and add jitter. Rendering uses a capped pixel ratio, frame-rate-independent motion, preallocated geometry, and stops drawing while hidden. GPU resources and animation callbacks are disposed on exit; unsupported/lost WebGL falls back to the canvas orb.
+The dashboard and Focus Mode now share a Three.js/WebGL constellation with 220 nodes, a cyan-white sprite bloom, dynamically colored proximity links, bounded organic drift, pointer tilt and four conversation states. The audio meter exposes separate 20–250 Hz bass, 250–2,000 Hz mid and 2,000–9,000 Hz high bands. Bass expands the constellation/core; mids and highs brighten links and add jitter. Rendering uses a capped pixel ratio, frame-rate-independent motion, preallocated geometry, and stops drawing while hidden. GPU resources and animation callbacks are disposed on exit; unsupported/lost WebGL falls back to an SVG radial ring.
 
 HUD captions show blue italic user transcripts and progressively reveal assistant words, with cyan metrics and common device names. This is a presentation animation; MP3 playback does not provide exact word timestamps. Reduced-motion settings disable caption animation and continuous particle drift/rotation. Voice replies remain limited to two sentences, and tool/backend status remains authoritative. Use **Full Screen Focus** to hide the surrounding dashboard.
+
+### Cinematic Focus refinements
+
+Visualizer implementation lives in `src/components/visualizer/` (`NeuralPlexus`, `HUDSubtitles`, `RadialRing`); `src/components/layout/DashboardLayout.tsx` owns the dual-view transition. The former flat component paths remain compatibility exports. The analyser uses FFT 256, with 220 nodes inside a radius of 95 and idle connections within 65 world units. Focus scales the viewport to 1.35 and fades peripheral panels over 400 ms; GPU resources are released after the transition. WebGL unavailability or loss uses an audio-reactive SVG radial ring.
+
+Mobile now defaults to a single column. **Zoom dashboard** retains the optional desktop layout for horizontal exploration. Goldsboro, NC is offered as an editable manual weather-city choice; only a city you explicitly save becomes your account's location, and device rows never claim connectivity without provider confirmation.
+
+**Start continuous voice session** opens Focus Mode and alternates foreground listening with speech playback. It waits through TTS preparation and output before rearming, ends on microphone errors, page hiding, Exit, keyboard entry, or **End voice session**, and expires after two minutes without new transcript activity. Browser recognition must be supported; some browsers may require another tap to restart recording. It is not a background wake-word listener.
+
+Build and checks from the app directory:
+
+```sh
+npm ci
+npm run dev
+npm run build
+npm run validate
+npm run lint
+npx deepspace test run all
+```
+
+Normal browser tests use DeepSpace test accounts. To mock only the paid model boundary as in CI: `JARVIS_TEST_AI=1 npx deepspace test run all`. Local proxy environments also use `JARVIS_DEV_PROXY=1` and the environment's configured CA/proxy settings. No backend API, Home Assistant/Roku provider policy, confirmation, or audit authorization changed in this UI refinement.

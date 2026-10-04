@@ -18,6 +18,8 @@ type Props = {
   onExit: () => void;
   onStop: () => void;
   onKeyboard: () => void;
+  continuous: boolean;
+  onEndSession: () => void;
 };
 export function JarvisFocus(p: Props) {
   const [keyboard, setKeyboard] = useState(false);
@@ -28,14 +30,6 @@ export function JarvisFocus(p: Props) {
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, [p.onExit]);
-  const label =
-    p.state === "listening"
-      ? "LISTENING…"
-      : p.state === "speaking"
-        ? "JARVIS IS SPEAKING…"
-        : p.state === "thinking"
-          ? "THINKING…"
-          : "READY";
   return (
     <section className="jarvis-focus" aria-label="Jarvis Focus Mode">
       <header className="focus-header">
@@ -47,10 +41,8 @@ export function JarvisFocus(p: Props) {
       <main className="focus-center">
         <NeuralPlexus state={p.state} meter={p.meter} />
         <div className="focus-captions">
-          <p className="focus-status" role="status">
-            {label}
-          </p>
           <HudSubtitles
+            state={p.state}
             userText={p.userCaption}
             text={p.state === "listening" ? "" : p.caption}
             animate={p.state === "speaking" || p.state === "thinking"}
@@ -85,6 +77,11 @@ export function JarvisFocus(p: Props) {
               <ArrowUp size={20} />
             </button>
           </form>
+        )}
+        {p.continuous && (
+          <button className="focus-end-session" onClick={p.onEndSession}>
+            End voice session
+          </button>
         )}
         <div className="focus-buttons">
           <button

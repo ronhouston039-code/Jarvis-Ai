@@ -82,7 +82,7 @@ test("frequency bands distinguish low bass from high-frequency audio", async () 
   await meter.startMicrophone();
   f.analyser.getByteFrequencyData = (data) => {
     data.fill(0);
-    data[2] = 255;
+    data[1] = 255;
     return data;
   };
   const bass = meter.bands("listening");
@@ -91,7 +91,7 @@ test("frequency bands distinguish low bass from high-frequency audio", async () 
   expect(bass.mid).toBe(0);
   f.analyser.getByteFrequencyData = (data) => {
     data.fill(0);
-    data[110] = 255;
+    data[30] = 255;
     return data;
   };
   const high = meter.bands("listening");
@@ -99,4 +99,27 @@ test("frequency bands distinguish low bass from high-frequency audio", async () 
   expect(high.high).toBeGreaterThan(0);
   expect(high.mid).toBe(0);
   meter.close();
+});
+
+test("partial speech analysis failure restores direct playback and releases it on stop", async () => {
+  const f = setup(),
+    meter = new FocusAudioMeter();
+  await meter.enable();
+  f.analyser.connect.mockImplementation(() => {
+    throw new Error("analysis_graph_unavailable");
+  });
+  const audio = {} as HTMLAudioElement;
+  expect(() => meter.attachSpeech(audio)).not.toThrow();
+  expect(f.output.connect).toHaveBeenNthCalledWith(1, f.analyser);
+  expect(f.output.connect).toHaveBeenNthCalledWith(2, f.context.destination);
+  expect(f.output.disconnect).toHaveBeenCalledOnce();
+  expect(f.analyser.disconnect).toHaveBeenCalledOnce();
+  expect(meter.level("speaking")).toBe(0);
+  // The restored direct route is retained, avoiding duplicate source creation.
+  meter.attachSpeech(audio);
+  expect(f.output.connect).toHaveBeenCalledTimes(2);
+  meter.attachSpeech(null);
+  expect(f.output.disconnect).toHaveBeenCalledTimes(2);
+  meter.close();
+  expect(f.context.close).toHaveBeenCalledOnce();
 });

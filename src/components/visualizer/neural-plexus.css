@@ -96,3 +96,9 @@
     animation: none;
   }
 }
+.plexus-status {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: #00d2ff;
+  margin: 8px 0 16px;
+}

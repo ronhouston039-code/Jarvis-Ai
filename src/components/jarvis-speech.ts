@@ -23,6 +23,7 @@ export class JarvisSpeechPlayer {
     private state: (speaking: boolean) => void,
     private notice: (message: string) => void,
     private audioChanged: (audio: HTMLAudioElement | null) => void = () => {},
+    private preparing: (preparing: boolean) => void = () => {},
   ) {}
   stop() {
     this.generation++;
@@ -37,6 +38,7 @@ export class JarvisSpeechPlayer {
     if (this.url) URL.revokeObjectURL(this.url);
     this.url = undefined;
     window.speechSynthesis?.cancel();
+    this.preparing(false);
     this.state(false);
   }
   currentAudio() {
@@ -58,6 +60,7 @@ export class JarvisSpeechPlayer {
     const id = this.generation;
     const spoken = spokenVersion(text);
     if (!spoken) return;
+    this.preparing(true);
     this.notice("");
     const request = new AbortController();
     this.request = request;
@@ -65,30 +68,44 @@ export class JarvisSpeechPlayer {
     const fallback = () => {
       if (id !== this.generation || fallbackStarted) return;
       fallbackStarted = true;
+      this.preparing(true);
       this.audioChanged(null);
       if (!window.speechSynthesis) {
+        this.preparing(false);
         this.notice("Speech is unavailable. You can still read the reply.");
         return;
       }
       this.notice("Fish Audio is unavailable. Using your device voice.");
-      const utterance = new SpeechSynthesisUtterance(spoken);
-      utterance.lang = navigator.language || "en-US";
-      utterance.rate = voiceRates[speed];
-      utterance.onstart = () => {
-        if (id === this.generation) this.state(true);
-      };
-      utterance.onend = () => {
-        if (id === this.generation) this.state(false);
-      };
-      utterance.onerror = () => {
+      const failDeviceSpeech = () => {
         if (id === this.generation) {
           this.state(false);
+          this.preparing(false);
           this.notice(
             "Could not play speech. Check your media volume or tap Listen again.",
           );
         }
       };
-      window.speechSynthesis.speak(utterance);
+      try {
+        const utterance = new SpeechSynthesisUtterance(spoken);
+        utterance.lang = navigator.language || "en-US";
+        utterance.rate = voiceRates[speed];
+        utterance.onstart = () => {
+          if (id === this.generation) {
+            this.state(true);
+            this.preparing(false);
+          }
+        };
+        utterance.onend = () => {
+          if (id === this.generation) {
+            this.state(false);
+            this.preparing(false);
+          }
+        };
+        utterance.onerror = failDeviceSpeech;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        failDeviceSpeech();
+      }
     };
     try {
       const response = await authenticatedFetch(
@@ -121,13 +138,17 @@ export class JarvisSpeechPlayer {
       audio.onended = () => {
         if (id === this.generation) {
           this.state(false);
+          this.preparing(false);
           this.audioChanged(null);
           if (this.url) URL.revokeObjectURL(this.url);
           this.url = undefined;
         }
       };
       await audio.play();
-      if (id === this.generation && !failed) this.state(true);
+      if (id === this.generation && !failed) {
+        this.state(true);
+        this.preparing(false);
+      }
     } catch {
       if (id === this.generation && !request.signal.aborted) fallback();
     }
