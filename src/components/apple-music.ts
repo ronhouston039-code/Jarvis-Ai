@@ -6,7 +6,15 @@ export type MusicItem = {
 export type MusicKitInstance = {
   isAuthorized: boolean;
   isPlaying?: boolean;
-  nowPlayingItem?: { title?: string; artistName?: string };
+  nowPlayingItem?: {
+    title?: string;
+    artistName?: string;
+    artwork?: { url?: string };
+  };
+  currentPlaybackTime?: number;
+  currentPlaybackDuration?: number;
+  addEventListener?: (name: string, listener: () => void) => void;
+  removeEventListener?: (name: string, listener: () => void) => void;
   skipToPreviousItem?: () => Promise<unknown>;
   skipToNextItem?: () => Promise<unknown>;
   authorize: () => Promise<string>;
@@ -97,4 +105,152 @@ export function openAppleMusic(url = "https://music.apple.com/"): void {
   )
     throw new Error("invalid_apple_music_url");
   window.open(destination.toString(), "_blank", "noopener,noreferrer");
+}
+
+export type AppleMusicPlayback = {
+  authorized: boolean;
+  playing: boolean;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  elapsed: number;
+  duration: number;
+};
+
+export function appleMusicArtwork(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const image = new URL(
+      url
+        .replace(/\{w\}/g, "160")
+        .replace(/\{h\}/g, "160")
+        .replace(/\{f\}/g, "jpg"),
+    );
+    if (
+      image.protocol !== "https:" ||
+      image.username ||
+      image.password ||
+      image.port ||
+      !(
+        image.hostname.endsWith(".mzstatic.com") ||
+        image.hostname.endsWith(".apple.com")
+      )
+    )
+      return null;
+    return image.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Current browser playback only: no library/history API or token access. */
+export function readAppleMusicPlayback(
+  music: MusicKitInstance | null,
+): AppleMusicPlayback {
+  const empty: AppleMusicPlayback = {
+    authorized: false,
+    playing: false,
+    title: "",
+    artist: "",
+    artworkUrl: null,
+    elapsed: 0,
+    duration: 0,
+  };
+  if (!music?.isAuthorized) return empty;
+  const item = music.nowPlayingItem;
+  const duration = Number.isFinite(music.currentPlaybackDuration)
+    ? Math.max(0, music.currentPlaybackDuration!)
+    : 0;
+  const time = Number.isFinite(music.currentPlaybackTime)
+    ? Math.max(0, music.currentPlaybackTime!)
+    : 0;
+  return {
+    authorized: true,
+    playing: music.isPlaying === true,
+    title:
+      typeof item?.title === "string" ? item.title.trim().slice(0, 200) : "",
+    artist:
+      typeof item?.artistName === "string"
+        ? item.artistName.trim().slice(0, 200)
+        : "",
+    artworkUrl: appleMusicArtwork(item?.artwork?.url),
+    elapsed: duration > 0 ? Math.min(time, duration) : time,
+    duration,
+  };
+}
+
+export function readScopedAppleMusicPlayback(
+  music: MusicKitInstance | null,
+  sessionUserId: string | null,
+  currentUserId: string | null,
+  configurationAllowed: boolean,
+): AppleMusicPlayback {
+  if (
+    !currentUserId ||
+    sessionUserId !== currentUserId ||
+    !configurationAllowed
+  )
+    return readAppleMusicPlayback(null);
+  return readAppleMusicPlayback(music);
+}
+
+export type AppleMusicPlaybackAction = "previous" | "play" | "pause" | "next";
+
+export async function controlAppleMusicPlayback(
+  music: MusicKitInstance,
+  action: AppleMusicPlaybackAction,
+): Promise<void> {
+  if (!music.isAuthorized) throw new Error("apple_music_not_authorized");
+  if (!music.nowPlayingItem?.title) throw new Error("apple_music_queue_empty");
+  switch (action) {
+    case "previous":
+      if (!music.skipToPreviousItem)
+        throw new Error("apple_music_previous_unavailable");
+      await music.skipToPreviousItem();
+      break;
+    case "next":
+      if (!music.skipToNextItem)
+        throw new Error("apple_music_next_unavailable");
+      await music.skipToNextItem();
+      break;
+    case "play":
+      await music.play();
+      break;
+    case "pause":
+      await music.pause();
+      break;
+    default:
+      throw new Error("apple_music_command_unavailable");
+  }
+}
+
+/** Older SDKs fall back to the card's bounded, foreground-only polling. */
+export function subscribeAppleMusicPlayback(
+  music: MusicKitInstance,
+  update: () => void,
+): () => void {
+  if (!music.addEventListener || !music.removeEventListener) return () => {};
+  const registered: string[] = [];
+  for (const event of [
+    "authorizationStatusDidChange",
+    "nowPlayingItemDidChange",
+    "playbackStateDidChange",
+    "playbackTimeDidChange",
+  ]) {
+    try {
+      music.addEventListener(event, update);
+      registered.push(event);
+    } catch {
+      // Some MusicKit versions omit an event; foreground polling remains available.
+    }
+  }
+  return () => {
+    for (const event of registered.splice(0)) {
+      try {
+        music.removeEventListener?.(event, update);
+      } catch {
+        // A revoked SDK instance may already have removed its listeners.
+      }
+    }
+  };
 }

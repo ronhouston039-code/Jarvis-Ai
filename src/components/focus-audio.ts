@@ -13,6 +13,10 @@ export class FocusAudioMeter {
   >();
   private samples = new Uint8Array(128);
   private generation = 0;
+  /** A lease protects a new capture from an older asynchronous turn's cleanup. */
+  microphoneRevision() {
+    return this.generation;
+  }
   async enable(): Promise<void> {
     if (!this.context || this.context.state === "closed") {
       const Constructor =
@@ -54,7 +58,9 @@ export class FocusAudioMeter {
     this.micSource.connect(this.micAnalyser); // No destination connection: prevents microphone feedback.
     return true;
   }
-  stopMicrophone() {
+  stopMicrophone(expectedRevision?: number) {
+    if (expectedRevision !== undefined && expectedRevision !== this.generation)
+      return;
     this.generation++;
     this.micSource?.disconnect();
     this.micAnalyser?.disconnect();

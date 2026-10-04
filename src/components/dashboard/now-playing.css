@@ -1,0 +1,119 @@
+.dashboard-now-playing .dashboard-music-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.dashboard-music-art {
+  flex: 0 0 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  color: #00d2ff;
+  background: linear-gradient(145deg, #093149, #07102e);
+  box-shadow: inset 0 0 14px #00d2ff1a;
+}
+.dashboard-music-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dashboard-music-info {
+  flex: 1;
+  min-width: 0;
+}
+.dashboard-music-info p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.dashboard-music-title {
+  color: #eef8ff;
+  font-size: 12px;
+}
+.dashboard-music-artist {
+  color: #79a7cb;
+  font-size: 10px;
+}
+.dashboard-music-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dashboard-music-controls button {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #00d2ff;
+  cursor: pointer;
+}
+.dashboard-music-controls .dashboard-music-play {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #00d2ff;
+  box-shadow: 0 0 8px #00d2ff33;
+}
+.dashboard-music-controls button:hover {
+  background: #00d2ff1a;
+}
+.dashboard-music-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dashboard-music-controls button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+.dashboard-music-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  color: #79a7cb;
+  font-size: 9px;
+}
+.dashboard-music-progress progress {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  border: none;
+  border-radius: 3px;
+  background: #173c5b;
+  color: #00d2ff;
+  accent-color: #00d2ff;
+}
+.dashboard-music-progress progress::-webkit-progress-bar {
+  background: #173c5b;
+}
+.dashboard-music-progress progress::-webkit-progress-value {
+  background: #00d2ff;
+}
+.dashboard-music-progress progress::-moz-progress-bar {
+  background: #00d2ff;
+}
+.dashboard-now-playing .dashboard-music-connect {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 10px;
+}
+.dashboard-music-message {
+  margin: 6px 0 0;
+  color: #b5d3e9;
+  font-size: 10px;
+}
+@media (max-width: 640px) {
+  .dashboard-music-controls button,
+  .dashboard-music-controls .dashboard-music-play {
+    width: 44px;
+    height: 44px;
+  }
+}

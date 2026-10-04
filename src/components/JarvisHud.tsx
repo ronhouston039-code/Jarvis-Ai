@@ -1,5 +1,10 @@
 import { HomeKitActivity } from "./HomeKitActivity";
 import { WeatherSummary } from "./WeatherConnect";
+import { NowPlaying } from "./dashboard/NowPlaying";
+import { useHomeDashboard } from "./dashboard/useHomeDashboard";
+import { Modal, Button } from "./ui";
+import { spokenVersion } from "./jarvis-speech";
+import type { TVShortcutController } from "./devices/useTVShortcuts";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useQuery } from "deepspace";
 import { Link } from "react-router-dom";
@@ -42,7 +47,13 @@ type Props = {
   onHome: () => void;
   onFocus: () => void;
   onContinuousVoice: () => void;
+  voiceSessionMode?: "talk" | "wake" | null;
+  onTalkToggle?: () => void;
+  onWakeToggle?: () => void;
   onPrompt: (prompt: string) => void;
+  tvShortcuts?: TVShortcutController;
+  onTurnOffTV?: () => void;
+  onTurnOnTV?: () => void;
   history: ReactNode;
   conversation: ReactNode;
   composer: ReactNode;
@@ -95,6 +106,20 @@ function Connection() {
   );
 }
 export function JarvisHud(p: Props) {
+  const [wakeConsent, setWakeConsent] = useState(false);
+  const home = useHomeDashboard();
+  const nativeTV = p.tvShortcuts?.supported ? p.tvShortcuts : null;
+  const tvStatus = home.tv
+    ? `${home.tv.online ? "Online" : "Offline"} · ${home.tv.state}`
+    : home.phase === "checking"
+      ? "Checking connection…"
+      : home.phase === "connected"
+        ? "Choose an approved TV"
+        : home.phase === "disabled"
+          ? "Home connection disabled"
+          : home.phase === "unavailable"
+            ? "Home bridge unavailable"
+            : "Connect your accessories";
   const state = p.speaking
     ? "speaking"
     : p.listening
@@ -173,7 +198,11 @@ export function JarvisHud(p: Props) {
         aria-label="Full JARVIS dashboard"
         tabIndex={0}
       >
-        <div ref={dashboard} className="hud-dashboard" data-state={state}>
+        <div
+          ref={dashboard}
+          className="hud-dashboard jarvis-desktop-shell"
+          data-state={state}
+        >
           <header className="hud-top">
             <div className="hud-brand">
               <span className="hud-logo-ring" aria-hidden="true" />
@@ -193,7 +222,7 @@ export function JarvisHud(p: Props) {
               <WeatherSummary />
             </Link>
           </header>
-          <div className="hud-body">
+          <div className="hud-body jarvis-main-content">
             <aside className="hud-menu" aria-label="Dashboard navigation">
               <button
                 className={!p.showChat ? "active" : ""}
@@ -246,16 +275,39 @@ export function JarvisHud(p: Props) {
                 <Link className="system-row" to="/connections?tab=home">
                   <Tv />
                   <span>
-                    {devices.find((d) => d.data.kind === "tv")?.data.name ||
-                      "TCL Roku TV"}
-                    <small>
-                      {devices.length
-                        ? `${devices.length} shortcuts · state unverified`
-                        : "Connect your accessories"}
+                    {nativeTV
+                      ? "KY TV"
+                      : home.tv?.name ||
+                        devices.find((d) => d.data.kind === "tv")?.data.name ||
+                        "TCL Roku TV"}
+                    <small
+                      className={
+                        !nativeTV && home.tv?.online ? "hud-device-online" : ""
+                      }
+                    >
+                      {nativeTV ? nativeTV.status.label : tvStatus}
                     </small>
                   </span>
                   <ChevronRight size={16} />
                 </Link>
+                {nativeTV && (
+                  <div className="system-tv-controls">
+                    <button data-greeting-skip onClick={p.onTurnOnTV}>
+                      Turn On TV
+                    </button>
+                    {nativeTV.status.kind === "requested" &&
+                      nativeTV.status.action && (
+                        <button
+                          data-greeting-skip
+                          onClick={() =>
+                            nativeTV.confirmResult(nativeTV.status.action!)
+                          }
+                        >
+                          Confirm TV is {nativeTV.status.action}
+                        </button>
+                      )}
+                  </div>
+                )}
                 <Connection />
                 <Link className="system-row" to="/connections?tab=security">
                   <Shield />
@@ -276,7 +328,18 @@ export function JarvisHud(p: Props) {
                   Quick Actions
                 </h2>
                 <div className="quick-grid">
-                  <button onClick={() => p.onPrompt("Turn off the TV.")}>
+                  <button
+                    data-greeting-skip
+                    onClick={() =>
+                      nativeTV
+                        ? p.onTurnOffTV?.()
+                        : p.onPrompt(
+                            home.tv
+                              ? `Turn off ${home.tv.name}.`
+                              : "Turn off the TV.",
+                          )
+                    }
+                  >
                     <Tv />
                     <span>Turn Off TV</span>
                   </button>
@@ -332,19 +395,51 @@ export function JarvisHud(p: Props) {
                   />
                 )}
 
-                <button
-                  className="plexus-fullscreen"
-                  onClick={p.onContinuousVoice}
-                  data-greeting-skip
-                >
-                  Start continuous voice session
-                </button>
+                <div className="hud-voice-modes">
+                  <button
+                    className="plexus-fullscreen"
+                    onClick={p.onContinuousVoice}
+                    data-greeting-skip
+                  >
+                    Start continuous voice session
+                  </button>
+                  {p.onTalkToggle && (
+                    <button
+                      className="plexus-fullscreen"
+                      data-greeting-skip
+                      aria-label="Talk mode"
+                      aria-pressed={p.voiceSessionMode === "talk"}
+                      onClick={p.onTalkToggle}
+                    >
+                      {p.voiceSessionMode === "talk"
+                        ? "Stop Talk"
+                        : "Talk mode"}
+                    </button>
+                  )}
+                  {p.onWakeToggle && (
+                    <button
+                      className="plexus-fullscreen"
+                      data-greeting-skip
+                      aria-label="Wake Jarvis"
+                      aria-pressed={p.voiceSessionMode === "wake"}
+                      onClick={() =>
+                        p.voiceSessionMode === "wake"
+                          ? p.onWakeToggle?.()
+                          : setWakeConsent(true)
+                      }
+                    >
+                      {p.voiceSessionMode === "wake"
+                        ? "Stop wake"
+                        : "Wake Jarvis"}
+                    </button>
+                  )}
+                </div>
               </div>
               {p.showChat && (
                 <div className="hud-conversation">{p.conversation}</div>
               )}
             </main>
-            <aside className="hud-right">
+            <aside className="hud-right jarvis-sidebar-right">
               <section className="hud-panel assistant-panel">
                 <Bot size={30} />
                 <div>
@@ -364,7 +459,9 @@ export function JarvisHud(p: Props) {
                             : "Checking connection"}
                   </p>
                   <button onClick={p.onChat}>
-                    I’m here and ready. How can I help you today?
+                    {p.assistantCaption
+                      ? spokenVersion(p.assistantCaption)
+                      : "I’m here and ready. How can I help you today?"}
                   </button>
                 </div>
                 <AudioWaveform state={state} meter={p.meter} compact />
@@ -413,39 +510,25 @@ export function JarvisHud(p: Props) {
                   <Clock3 size={18} />
                   Recent Activity<Link to="/personal">See all</Link>
                 </h2>
-                <HomeKitActivity compact />
-              </section>
-              <section className="hud-panel media-panel">
-                <h2>
-                  <Music size={18} />
-                  Now Playing
-                </h2>
-                <div className="hud-media-content">
-                  <Link
-                    className="hud-media-art"
-                    to="/connections?tab=music"
-                    aria-label="Choose music"
-                  >
-                    <Music size={24} />
-                  </Link>
-                  <div>
-                    <p>
-                      {devices.some((d) => d.data.kind === "music")
-                        ? "Apple Music shortcut registered"
-                        : "Apple Music · tap to connect"}
-                    </p>
-                    <Link
-                      className="hud-panel-action"
-                      to="/connections?tab=music"
-                    >
-                      Open media controls
-                    </Link>
-                  </div>
+                <div className="hud-activity-feed">
+                  {nativeTV?.activity.slice(0, 3).map((entry) => (
+                    <article className="hud-shortcut-activity" key={entry.id}>
+                      <h3>{entry.message}</h3>
+                      <time dateTime={entry.timestamp}>
+                        {new Date(entry.timestamp).toLocaleTimeString(
+                          undefined,
+                          { hour: "2-digit", minute: "2-digit" },
+                        )}
+                      </time>
+                    </article>
+                  ))}
+                  <HomeKitActivity compact />
                 </div>
               </section>
+              <NowPlaying />
             </aside>
           </div>
-          <footer className="hud-bottom">
+          <footer className="hud-bottom jarvis-command-bar">
             <div className="hud-command-waves" aria-hidden="true">
               <AudioWaveform state={state} meter={p.meter} />
               <AudioWaveform state={state} meter={p.meter} />
@@ -454,6 +537,46 @@ export function JarvisHud(p: Props) {
           </footer>
         </div>
       </div>
+      <Modal
+        open={wakeConsent}
+        onClose={() => setWakeConsent(false)}
+        size="sm"
+        aria-label="Enable Jarvis wake listening"
+      >
+        <Modal.Header>
+          <Modal.Title>Enable “Jarvis” wake listening?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>
+            JARVIS listens while this app is visible. Your browser’s speech
+            recognition service may process microphone audio online to recognise
+            the wake phrase.
+          </p>
+          <p className="muted text-sm">
+            Requests go to JARVIS after you say “Jarvis”. This browser mode is
+            not local-only wake-word detection. It stops when the app is hidden,
+            you turn it off, or the session times out.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="ghost"
+            data-greeting-skip
+            onClick={() => setWakeConsent(false)}
+          >
+            Not now
+          </Button>
+          <Button
+            data-greeting-skip
+            onClick={() => {
+              setWakeConsent(false);
+              p.onWakeToggle?.();
+            }}
+          >
+            Enable wake listening
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </>
   );
 }

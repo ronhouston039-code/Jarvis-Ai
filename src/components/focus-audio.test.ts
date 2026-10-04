@@ -62,6 +62,19 @@ test("late microphone permission cannot restart listening after exit", async () 
   expect(f.track.stop).toHaveBeenCalledOnce();
   expect(f.mic.connect).not.toHaveBeenCalled();
 });
+test("cleanup from an older capture cannot release a newer microphone", async () => {
+  const f = setup(),
+    meter = new FocusAudioMeter();
+  await meter.startMicrophone();
+  const oldRevision = meter.microphoneRevision();
+  await meter.startMicrophone();
+  f.track.stop.mockClear();
+  meter.stopMicrophone(oldRevision);
+  expect(f.track.stop).not.toHaveBeenCalled();
+  expect(meter.level("listening")).toBe(1);
+  meter.close();
+  expect(f.track.stop).toHaveBeenCalledOnce();
+});
 test("speech output passes through analyser to speakers without duplicate source creation", async () => {
   const f = setup(),
     meter = new FocusAudioMeter();

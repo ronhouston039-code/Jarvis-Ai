@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import type { FocusState } from "../FocusOrb";
 import type { FocusAudioMeter } from "../focus-audio";
 import { NeuralPlexus } from "./NeuralPlexus";
+import { HolographicGlobe } from "./HolographicGlobe";
 import "./dashboard-hologram.css";
 
 const ticks = Array.from({ length: 120 }, (_, index) => index * 3);
@@ -211,11 +212,6 @@ export function DashboardHologram({
         focusable="false"
       >
         <defs>
-          <radialGradient id={`${id}-planet`} cx="40%" cy="30%" r="75%">
-            <stop offset="0" stopColor="#0070b5" stopOpacity="0.85" />
-            <stop offset="0.6" stopColor="#00245c" stopOpacity="0.97" />
-            <stop offset="1" stopColor="#003797" stopOpacity="0.95" />
-          </radialGradient>
           <radialGradient id={`${id}-planet-halo`}>
             <stop offset="0.5" stopColor="#00bfff" stopOpacity="0.18" />
             <stop offset="0.7" stopColor="#0077fe" stopOpacity="0.06" />
@@ -233,9 +229,6 @@ export function DashboardHologram({
             <stop offset="0.8" stopColor="#00d2ff" stopOpacity="0.65" />
             <stop offset="1" stopColor="#00aaff" stopOpacity="0" />
           </linearGradient>
-          <clipPath id={`${id}-planet-clip`}>
-            <circle cx="120" cy="67" r="58" />
-          </clipPath>
         </defs>
         <ellipse
           cx="120"
@@ -283,60 +276,6 @@ export function DashboardHologram({
         />
         <rect x="110" y="84" width="20" height="69" fill={`url(#${id}-beam)`} />
         <circle cx="120" cy="67" r="82" fill={`url(#${id}-planet-halo)`} />
-        <g className="dashboard-hologram__planet">
-          <circle
-            cx="120"
-            cy="67"
-            r="58"
-            fill={`url(#${id}-planet)`}
-            stroke="#38ddff"
-            strokeWidth="1.1"
-          />
-          <g clipPath={`url(#${id}-planet-clip)`}>
-            <g stroke="#0bbcff" strokeWidth="0.55" opacity="0.45">
-              <ellipse cx="120" cy="67" rx="58" ry="18" />
-              <ellipse cx="120" cy="45" rx="53" ry="13" />
-              <ellipse cx="120" cy="90" rx="53" ry="13" />
-              <ellipse cx="120" cy="67" rx="20" ry="58" />
-              <ellipse cx="120" cy="67" rx="43" ry="58" />
-              <path d="M 62 67 H 178 M 120 9 V 125" />
-            </g>
-            <g
-              fill="#048bb3"
-              fillOpacity="0.4"
-              stroke="#42e9ff"
-              strokeWidth="1"
-              strokeLinejoin="round"
-            >
-              <path d="M 75 27 L 87 21 L 97 23 L 106 18 L 113 23 L 107 31 L 109 39 L 102 43 L 97 51 L 87 49 L 85 56 L 91 62 L 87 68 L 80 62 L 77 52 L 69 46 L 69 36 Z" />
-              <path d="M 99 14 L 110 10 L 119 15 L 114 23 L 106 23 Z" />
-              <path d="M 88 67 L 98 66 L 106 75 L 111 77 L 109 88 L 103 98 L 100 111 L 95 119 L 91 108 L 93 96 L 88 88 L 85 78 Z" />
-              <path d="M 126 30 L 134 25 L 144 28 L 145 35 L 137 40 L 130 36 L 126 43 L 121 40 Z" />
-              <path d="M 129 44 L 141 42 L 148 48 L 148 57 L 154 65 L 149 76 L 144 86 L 136 88 L 131 78 L 126 68 L 124 55 Z" />
-              <path d="M 148 23 L 156 26 L 161 22 L 170 27 L 179 38 L 175 48 L 165 47 L 161 56 L 151 50 L 147 42 L 140 36 Z" />
-              <path d="M 165 84 L 175 80 L 183 86 L 183 96 L 172 99 L 163 93 Z" />
-              <path d="M 155 83 L 157 89 L 154 96 L 151 91 Z" />
-            </g>
-          </g>
-          <circle
-            cx="120"
-            cy="67"
-            r="59"
-            stroke="#00e5ff"
-            strokeWidth="0.9"
-            opacity="0.35"
-          />
-          <ellipse
-            cx="116"
-            cy="65"
-            rx="68"
-            ry="13"
-            transform="rotate(-14 116 65)"
-            stroke="#00bfff"
-            strokeWidth="0.8"
-            opacity="0.7"
-          />
-        </g>
         <ellipse
           cx="120"
           cy="138"
@@ -352,6 +291,9 @@ export function DashboardHologram({
           opacity="0.7"
         />
       </svg>
+      <div className="dashboard-hologram__globe-scene">
+        <HolographicGlobe state={state} meter={meter} />
+      </div>
     </div>
   );
 }

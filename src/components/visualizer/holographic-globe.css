@@ -1,0 +1,29 @@
+.holographic-globe {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 5px rgb(0 191 255 / 55%));
+  background: radial-gradient(circle, rgb(0 160 255 / 9%) 20%, transparent 64%);
+}
+
+.holographic-globe__canvas,
+.holographic-globe__fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dashboard-hologram__globe-scene {
+  position: absolute;
+  width: 34%;
+  aspect-ratio: 1;
+  bottom: 7.5%;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holographic-globe {
+    filter: drop-shadow(0 0 3px rgb(0 191 255 / 35%));
+  }
+}

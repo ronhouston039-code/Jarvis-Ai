@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "deepspace";
+import { useAuthProfileReady, useQuery } from "deepspace";
 import { Link } from "react-router-dom";
 import { authenticatedFetch } from "../jarvis/client";
 import type { WeatherSnapshot } from "../jarvis/weather";
@@ -309,29 +309,59 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
 }
 
 export function WeatherSummary() {
+  const { userId, isSignedIn, isReady } = useAuthProfileReady({
+    requireUser: true,
+  });
   const { records } = useQuery<{
     label: string;
     latitude: number;
     longitude: number;
   }>("locations", { where: { enabled: 1 }, limit: 1 });
   const location = records[0]?.data;
-  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const hasLocation = Boolean(location);
+  const locationKey = `${userId}:${location?.label}:${location?.latitude}:${location?.longitude}`;
+  const [snapshot, setSnapshot] = useState<{
+    key: string;
+    weather: WeatherSnapshot;
+  } | null>(null);
+  const weather =
+    isSignedIn && snapshot?.key === locationKey ? snapshot.weather : null;
   useEffect(() => {
-    setWeather(null);
-    if (!location) return;
+    setSnapshot(null);
+    if (!hasLocation || !isReady || !isSignedIn) return;
     let active = true;
-    void authenticatedFetch("/api/jarvis/connections/weather")
-      .then(async (r) => {
-        if (r.ok) {
-          const data = (await r.json()) as WeatherSnapshot;
-          if (active) setWeather(data);
-        }
-      })
-      .catch(() => {});
+    let request: AbortController | null = null;
+    const refresh = async () => {
+      request?.abort();
+      const controller = new AbortController();
+      request = controller;
+      try {
+        const response = await authenticatedFetch(
+          "/api/jarvis/connections/weather",
+          undefined,
+          controller.signal,
+        );
+        if (!response.ok) throw new Error("weather_unavailable");
+        const data = (await response.json()) as WeatherSnapshot;
+        if (active && !controller.signal.aborted)
+          setSnapshot({ key: locationKey, weather: data });
+      } catch {
+        if (active && !controller.signal.aborted) setSnapshot(null);
+      }
+    };
+    const foreground = () => {
+      if (!document.hidden) void refresh();
+    };
+    void refresh();
+    const timer = window.setInterval(foreground, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", foreground);
     return () => {
       active = false;
+      request?.abort();
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", foreground);
     };
-  }, [location?.label, location?.latitude, location?.longitude]);
+  }, [locationKey, hasLocation, isReady, isSignedIn]);
   return (
     <div>
       {weather ? (

@@ -1,6 +1,6 @@
 # JARVIS on DeepSpace
 
-An iPhone-friendly holographic dashboard and personal assistant with streamed AI conversations, tap-to-talk dictation, device spoken replies, private conversation history, explicit preference memory, persistent one-time reminders, notifications, and action-bound deletion confirmations.
+An iPhone-friendly holographic dashboard and personal assistant with streamed AI conversations, foreground Talk/wake sessions, interruptible spoken replies, private conversation history, explicit preference memory, persistent one-time reminders, notifications, and action-bound deletion confirmations.
 
 This project is the live DeepSpace adaptation. The modular Python backend in the workspace root remains separate. Live weather, BBC news and Wikipedia retrieval are available. Apple Home and Apple Music controls use user-registered, explicitly tapped iPhone Shortcuts; direct library access, calendar and email are not connected. No provider success is simulated in production. Background wake-word detection and push notifications are not implemented. Dictation availability depends on browser/device support; iPhone keyboard dictation is a fallback.
 
@@ -240,7 +240,9 @@ Visualizer implementation lives in `src/components/visualizer/` (`NeuralPlexus`,
 
 Mobile now defaults to a single column. **Zoom dashboard** retains the optional desktop layout for horizontal exploration. Goldsboro, NC is offered as an editable manual weather-city choice; only a city you explicitly save becomes your account's location, and device rows never claim connectivity without provider confirmation.
 
-**Start continuous voice session** opens Focus Mode and alternates foreground listening with speech playback. It waits through TTS preparation and output before rearming, ends on microphone errors, page hiding, Exit, keyboard entry, or **End voice session**, and expires after two minutes without new transcript activity. Browser recognition must be supported; some browsers may require another tap to restart recording. It is not a background wake-word listener.
+**Start continuous voice session** opens Focus Mode and alternates foreground listening with speech playback. **Talk mode** provides the same turn loop within the dashboard. **Wake Jarvis** first explains microphone use and browser recognition, then accepts commands beginning with “Jarvis” or “Hey Jarvis” while the app is open. This uses browser speech recognition, which may process audio online; it is not local-only keyword detection or a background listener. Voice sessions wait through TTS preparation before rearming and end on microphone errors, page hiding, Exit, keyboard entry, explicit Stop, or a two-minute inactivity timeout. Browser recognition must be supported; some browsers may require another tap to restart recording.
+
+A local Web Audio energy detector ends a heard turn after sustained silence and listens for sustained user speech during Fish Audio or device TTS playback. Detected speech stops output and starts the next recognition turn. Echo cancellation and adaptive thresholds reduce self-interruption; this is not speaker identification and performance depends on the microphone, room and browser. Headphones improve separation. Tapping the microphone always stops current output immediately. Microphone tracks, playback, analysers and animation callbacks are released when the session ends or account changes.
 
 Build and checks from the app directory:
 
@@ -258,3 +260,28 @@ Normal browser tests use DeepSpace test accounts. To mock only the paid model bo
 ### Cinematic dashboard
 
 The dashboard uses a locally served cyan city backdrop, translucent illuminated cards, concentric orbital rings, a holographic globe, and three SVG waveforms driven by the existing local audio meter. `DashboardHologram` wraps the live particle scene only in dashboard mode; Cinematic Focus retains its uncluttered plexus. The top bar shows the current device date/time and saved location/weather, and keeps the authenticated account menu available. Connection states, reminders, activity, music availability and all action confirmations use existing live services rather than the reference image's sample data. The iPhone layout remains one column with an accessible bottom microphone; optional desktop zoom is retained.
+
+The lower globe is a rotating Three.js wireframe with geographic silhouettes, a responsive transparent canvas, reduced-motion support and an SVG fallback. The TV status reads the authenticated Home Assistant bridge and only selects an unambiguous approved TV. **Turn Off TV** submits the user's command through the existing tool loop; exact action confirmation remains required. Direct cloud access to private Roku ECP addresses remains disabled. Header weather refreshes from the saved location every five minutes while visible and when the app returns to the foreground.
+
+The **Now Playing** card reads the authorized MusicKit session's actual title, artist, artwork and progress, and sends playback controls to that session. It does not authorize automatically or read listening history. Missing configuration or authorization shows a Connections link. Apple Music requires a valid developer token and the user's Apple authorization; Home Assistant requires its separately configured bridge. The assistant never treats a dashboard button tap or queued action as verified completion.
+
+The desktop shell uses a viewport-height grid for its header, shrinking content row and pinned command bar. Left/right panels scroll internally on short displays; the microphone stays above the screen edge. Mobile keeps its single-column view and optional desktop zoom. The shell, content, right column and footer also expose `jarvis-desktop-shell`, `jarvis-main-content`, `jarvis-sidebar-right` and `jarvis-command-bar` class names.
+
+### iPhone TV Siri Shortcuts
+
+On iOS Safari, **KY TV** has **Turn On TV** and **Turn Off TV** controls. Create two working Apple Shortcuts with the exact names **Tv On** and **Tv Off**, and connect their actions to your TV locally. Review the corresponding JARVIS sheet, then tap **Run Tv On** or **Run Tv Off** to open `shortcuts://run-shortcut?name=Tv%20On` or `shortcuts://run-shortcut?name=Tv%20Off`. Cancel opens nothing. Simple user commands such as “Jarvis, turn off the TV” open the same review; conditions, ambiguous device names and compound tasks stay with the existing tool loop. Voice capture and playback end before the native handoff.
+
+Safari cannot verify that a Shortcut exists, succeeded or changed the TV's power/network state. A reviewed handoff shows **Action Dispatched** with the requested On/Off state marked unverified. Recent Activity records **KY TV power command dispatched**, the action and a timestamp; it never assumes an Online/Offline state. With spoken replies enabled, JARVIS says “Sending power command to the TV now, Sir.” Opening Shortcuts may pause browser speech; the on-screen status remains available. After observing the TV, tap **Confirm TV is on/off** for a separately labeled **user-confirmed, not device verified** state. This local report cannot authorize Home Assistant or any server action. History is sanitized, limited to 20 entries and stored only in this browser under the authenticated account. It is separate from the backend HomeKit audit trail. Other browsers continue to use the connected Home Assistant provider or existing Connections shortcuts.
+
+Files for this update:
+
+| Area | Created or modified files |
+| --- | --- |
+| Persona | `src/assistant/persona.ts`, `persona.test.ts`, `src/ai/tools.ts` |
+| Conversation and voice | `src/components/JarvisChat.tsx`, `focus-audio.ts`, `focus-audio.test.ts`, `voice/voice-activity.ts`, `voice/voice-activity.test.ts`, `src/pages/(app)/home.tsx` |
+| Dashboard and weather | `src/components/JarvisHud.tsx`, `jarvis-dashboard.css`, `WeatherConnect.tsx`, `dashboard/home-dashboard.ts`, `home-dashboard.test.ts`, `useHomeDashboard.ts` |
+| Globe | `src/components/visualizer/DashboardHologram.tsx`, `HolographicGlobe.tsx`, `holographic-globe.css` |
+| Music | `src/components/apple-music.ts`, `apple-music.test.ts`, `dashboard/NowPlaying.tsx`, `now-playing.css` |
+| Siri TV controls | `src/components/devices/TVShortcutDialog.tsx`, `useTVShortcuts.ts`, `useTVShortcuts.test.ts`, `tv-intent.ts`, `tv-intent.test.ts` |
+| Browser checks | `tests/dashboard-globe.spec.ts`, `dashboard-music.spec.ts`, `voice-turns.spec.ts`, `tv-shortcuts.spec.ts` |
+| Documentation | `README.md` |

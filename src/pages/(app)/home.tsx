@@ -4,7 +4,7 @@ import { JarvisOrb } from "../../components/JarvisOrb";
 export default function HomePage() {
   const { isSignedIn, user } = useAuthProfileReady({ requireUser: true });
   return isSignedIn && user ? (
-    <JarvisChat userId={user.id} />
+    <JarvisChat key={user.id} userId={user.id} />
   ) : (
     <div className="signed-out">
       <JarvisOrb />
