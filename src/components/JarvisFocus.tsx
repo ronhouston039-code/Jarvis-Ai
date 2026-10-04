@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { ArrowUp, Keyboard, Mic, Square, X } from "lucide-react";
-import { FocusOrb, type FocusState } from "./FocusOrb";
+import type { FocusState } from "./FocusOrb";
+import { NeuralPlexus } from "./NeuralPlexus";
+import { HudSubtitles } from "./HudSubtitles";
 import type { FocusAudioMeter } from "./focus-audio";
 import "./jarvis-focus.css";
 type Props = {
   state: FocusState;
   meter: FocusAudioMeter;
   caption: string;
+  userCaption: string;
   draft: string;
   error: string;
   onDraft: (value: string) => void;
@@ -42,14 +45,16 @@ export function JarvisFocus(p: Props) {
         </button>
       </header>
       <main className="focus-center">
-        <FocusOrb state={p.state} meter={p.meter} />
+        <NeuralPlexus state={p.state} meter={p.meter} />
         <div className="focus-captions">
           <p className="focus-status" role="status">
             {label}
           </p>
-          <p className="focus-subtitle" aria-live="polite">
-            {p.caption || "Tap the microphone to talk to Jarvis."}
-          </p>
+          <HudSubtitles
+            userText={p.userCaption}
+            text={p.state === "listening" ? "" : p.caption}
+            animate={p.state === "speaking" || p.state === "thinking"}
+          />
           {p.error && (
             <p className="focus-error" role="alert">
               {p.error}

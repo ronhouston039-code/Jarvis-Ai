@@ -83,7 +83,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       setSpeaking,
       setVoiceError,
       (audio) => {
-        if (focusRef.current) meter.current?.attachSpeech(audio);
+        meter.current?.attachSpeech(audio);
       },
     );
   const pendingSpeech = useRef<{
@@ -129,6 +129,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       /* Playback still works without storage. */
     }
     setSpokenCaption("Playing your saved greeting.");
+    void enableAudio();
     await speaker.current?.greet(speed);
   }, [userId]);
   useEffect(() => {
@@ -164,6 +165,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     } catch {
       /* Default speed is available without session storage. */
     }
+    void enableAudio();
     void speaker.current?.speak(text, speed);
   }
   const bottom = useRef<HTMLDivElement>(null);
@@ -308,7 +310,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     speech.current = recognition;
     recognition.lang = navigator.language;
     recognition.continuous = false;
-    recognition.interimResults = focusRef.current;
+    recognition.interimResults = true;
     recognition.onresult = (event) => {
       if (speech.current !== recognition) return;
       const results = Array.from(event.results);
@@ -346,9 +348,14 @@ export function JarvisChat({ userId }: { userId: string }) {
     // Flag permission setup immediately so a second tap can cancel it.
     setListening(true);
     try {
-      if (focusRef.current && !(await meter.current?.startMicrophone())) {
-        setListening(false);
-        return;
+      try {
+        if (!(await meter.current?.startMicrophone())) {
+          setListening(false);
+          return;
+        }
+      } catch (failure) {
+        if (focusRef.current) throw failure;
+        // Browser dictation can still request its own microphone on devices without Web Audio capture.
       }
       if (speech.current !== recognition || (focusMode && !focusRef.current)) {
         meter.current?.stopMicrophone();
@@ -394,11 +401,10 @@ export function JarvisChat({ userId }: { userId: string }) {
   function submit() {
     sendMessage(draft);
   }
-  const enableFocusAudio = useCallback(async () => {
+  const enableAudio = useCallback(async () => {
     try {
       await meter.current?.enable();
-      if (focusRef.current)
-        meter.current?.attachSpeech(speaker.current?.currentAudio() ?? null);
+      meter.current?.attachSpeech(speaker.current?.currentAudio() ?? null);
     } catch {
       setVoiceError(
         "Audio visualization is unavailable in this browser. Voice and keyboard controls remain available.",
@@ -433,7 +439,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       next.set("mode", "focus");
       return next;
     });
-    void enableFocusAudio();
+    void enableAudio();
   }
   useEffect(() => {
     focusRef.current = focusMode;
@@ -475,8 +481,9 @@ export function JarvisChat({ userId }: { userId: string }) {
               ? transcript
               : isLoading
                 ? lastReply || "Working on your request…"
-                : lastReply || transcript
+                : lastReply || ""
         }
+        userCaption={transcript}
         draft={draft}
         error={
           voiceError ||
@@ -491,7 +498,7 @@ export function JarvisChat({ userId }: { userId: string }) {
           speech.current?.stop();
           meter.current?.stopMicrophone();
           setListening(false);
-          void enableFocusAudio();
+          void enableAudio();
         }}
       />
     );
@@ -503,6 +510,14 @@ export function JarvisChat({ userId }: { userId: string }) {
       busy={isLoading}
       onVoice={() => void dictate()}
       onFocus={enterFocus}
+      meter={meter.current}
+      userCaption={transcript}
+      assistantCaption={
+        speaking
+          ? spokenCaption
+          : [...messages].reverse().find((m) => m.role === "assistant")
+              ?.content || ""
+      }
       provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
       showChat={showChat}
       onHome={() => setShowChat(false)}

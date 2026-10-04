@@ -76,3 +76,27 @@ test("speech output passes through analyser to speakers without duplicate source
   expect(meter.level("speaking")).toBe(0);
   meter.close();
 });
+test("frequency bands distinguish low bass from high-frequency audio", async () => {
+  const f = setup(),
+    meter = new FocusAudioMeter();
+  await meter.startMicrophone();
+  f.analyser.getByteFrequencyData = (data) => {
+    data.fill(0);
+    data[2] = 255;
+    return data;
+  };
+  const bass = meter.bands("listening");
+  expect(bass.bass).toBeGreaterThan(0);
+  expect(bass.high).toBe(0);
+  expect(bass.mid).toBe(0);
+  f.analyser.getByteFrequencyData = (data) => {
+    data.fill(0);
+    data[110] = 255;
+    return data;
+  };
+  const high = meter.bands("listening");
+  expect(high.bass).toBe(0);
+  expect(high.high).toBeGreaterThan(0);
+  expect(high.mid).toBe(0);
+  meter.close();
+});

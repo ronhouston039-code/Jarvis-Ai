@@ -1,0 +1,98 @@
+.neural-plexus {
+  width: 480px;
+  height: 480px;
+  max-width: 100%;
+  flex-shrink: 0;
+  touch-action: pan-y;
+}
+.neural-plexus canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.plexus-subtitles {
+  text-align: center;
+  max-width: 740px;
+  width: 100%;
+  margin: 0 auto;
+}
+.plexus-user {
+  color: #68a7e8;
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 8px 0 14px;
+  overflow-wrap: anywhere;
+}
+.plexus-answer,
+.plexus-hint {
+  color: #f1f8ff;
+  font-size: clamp(17px, 2.1vw, 23px);
+  line-height: 1.55;
+  max-height: 24dvh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.plexus-answer mark {
+  color: #00d2ff;
+  background: transparent;
+}
+.plexus-answer span,
+.plexus-answer mark {
+  animation: plexus-word-in 0.22s ease-out both;
+}
+.hud-hologram {
+  flex-direction: column;
+}
+.hud-hologram .neural-plexus {
+  width: 480px;
+  height: 420px;
+}
+.hud-hologram .plexus-subtitles {
+  margin-top: -35px;
+  max-width: 470px;
+}
+.hud-hologram .plexus-answer {
+  font-size: 16px;
+  max-height: 100px;
+}
+.plexus-fullscreen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #00d2ff;
+  background: transparent;
+  font-size: 12px;
+  padding: 12px;
+  margin: 10px auto 0;
+  cursor: pointer;
+}
+@keyframes plexus-word-in {
+  from {
+    opacity: 0.25;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@media (max-width: 600px) {
+  .jarvis-focus .neural-plexus {
+    width: 330px;
+    height: 330px;
+  }
+}
+@media (max-height: 620px) and (min-width: 601px) {
+  .jarvis-focus .neural-plexus {
+    width: 330px;
+    height: 330px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plexus-answer span,
+  .plexus-answer mark {
+    animation: none;
+  }
+}

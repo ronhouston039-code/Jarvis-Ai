@@ -8,6 +8,7 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
     const state = window as unknown as {
       recognition: { onresult?: (e: unknown) => void };
       stream: MediaStream;
+      oscillator: OscillatorNode;
     };
     Object.defineProperty(window, "SpeechRecognition", {
       value: class {
@@ -29,6 +30,7 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
       oscillator.connect(target);
       oscillator.start();
       state.stream = target.stream;
+      state.oscillator = oscillator;
       target.stream.getTracks()[0].addEventListener("ended", () => {
         oscillator.stop();
         void context.close();
@@ -40,6 +42,13 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
   await a.page.getByRole("button", { name: "Open Jarvis Focus Mode" }).click();
   const focus = a.page.getByRole("region", { name: "Jarvis Focus Mode" });
   await expect(focus).toBeVisible();
+  await expect(a.page.locator("canvas[data-renderer=webgl]")).toBeVisible();
+  await expect(a.page.locator("canvas")).toHaveAttribute("data-nodes", "220");
+  await expect
+    .poll(async () =>
+      Number(await a.page.locator("canvas").getAttribute("data-connections")),
+    )
+    .toBeGreaterThan(0);
   await expect(focus).toHaveCSS("background-color", "rgb(0, 2, 6)");
   await a.page.getByRole("button", { name: "Start Focus listening" }).click();
   await expect(a.page.getByText("LISTENING…", { exact: true })).toBeVisible();
@@ -58,8 +67,28 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
     ).recognition.onresult({ results: [result] });
   });
   await expect(
-    a.page.getByText("Turn on my lamp", { exact: true }),
+    a.page.getByText("“Turn on my lamp”", { exact: true }),
   ).toBeVisible();
+  await a.page.evaluate(() => {
+    (
+      window as unknown as { oscillator: OscillatorNode }
+    ).oscillator.frequency.value = 100;
+  });
+  await expect
+    .poll(async () =>
+      Number(await a.page.locator("canvas").getAttribute("data-bass")),
+    )
+    .toBeGreaterThan(0.1);
+  await a.page.evaluate(() => {
+    (
+      window as unknown as { oscillator: OscillatorNode }
+    ).oscillator.frequency.value = 6000;
+  });
+  await expect
+    .poll(async () =>
+      Number(await a.page.locator("canvas").getAttribute("data-high")),
+    )
+    .toBeGreaterThan(0.1);
   await a.page.getByRole("button", { name: "Show Focus keyboard" }).click();
   await expect(
     a.page.getByRole("textbox", { name: "Message JARVIS in Focus Mode" }),
@@ -77,6 +106,13 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
   await a.page.setViewportSize({ width: 390, height: 844 });
   await a.page.getByRole("button", { name: "Hide Focus keyboard" }).click();
   await a.page.screenshot({ path: "test-results/jarvis-focus-mobile.png" });
+  await a.page
+    .locator("canvas")
+    .evaluate((canvas) =>
+      canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true })),
+    );
+  await expect(a.page.locator("canvas[data-renderer=webgl]")).toHaveCount(0);
+  await expect(a.page.locator("canvas.focus-orb")).toBeVisible();
   await a.page.keyboard.press("Escape");
   await expect(focus).not.toBeVisible();
   await expect(

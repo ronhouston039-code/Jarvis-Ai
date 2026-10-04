@@ -238,7 +238,7 @@ test("holographic dashboard shows honest connection states and working navigatio
   await a.page.setViewportSize({ width: 1440, height: 1000 });
   await a.page.goto("/home");
   await expect(a.page.locator(".hud-brand h1")).toHaveText("JARVIS");
-  await expect(a.page.locator(".hud-reactor")).toBeVisible();
+  await expect(a.page.locator(".neural-plexus canvas")).toBeVisible();
   await expect(a.page.locator(".hud-weather")).toContainText(
     "Tap to set location",
   );
@@ -257,7 +257,7 @@ test("holographic dashboard shows honest connection states and working navigatio
   await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await expect(a.page.getByText("Conversation channel open.")).toBeVisible();
   await a.page.getByRole("button", { name: "HOME", exact: true }).click();
-  await expect(a.page.locator(".hud-reactor")).toBeVisible();
+  await expect(a.page.locator(".neural-plexus canvas")).toBeVisible();
   await a.page.getByRole("link", { name: "PRODUCTIVITY", exact: true }).click();
   await expect(
     a.page.getByRole("heading", { name: "My space", exact: true }),
@@ -280,9 +280,11 @@ test("streamed chat executes registered time tool and persists across reload", a
     .getByRole("button", { name: "Send message", exact: true })
     .click();
   await expect(
-    a.page.getByText("The current time was retrieved successfully.", {
-      exact: true,
-    }),
+    a.page
+      .getByText("The current time was retrieved successfully.", {
+        exact: true,
+      })
+      .last(),
   ).toBeVisible({ timeout: 20000 });
   await expect(
     b.page.getByText("The current time was retrieved successfully.", {
@@ -293,9 +295,11 @@ test("streamed chat executes registered time tool and persists across reload", a
   await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await a.page.locator(".history-item").first().click();
   await expect(
-    a.page.getByText("The current time was retrieved successfully.", {
-      exact: true,
-    }),
+    a.page
+      .getByText("The current time was retrieved successfully.", {
+        exact: true,
+      })
+      .last(),
   ).toBeVisible();
   await a.page.goto("/personal");
   const card = a.page
@@ -572,9 +576,11 @@ test("Listen requests server Fish audio and falls back safely to device speech",
     .fill("Please get the current UTC time.");
   await a.page.getByRole("button", { name: "Send message" }).click();
   await expect(
-    a.page.getByText("The current time was retrieved successfully.", {
-      exact: true,
-    }),
+    a.page
+      .getByText("The current time was retrieved successfully.", {
+        exact: true,
+      })
+      .last(),
   ).toBeVisible();
   await a.page
     .getByRole("button", { name: "Read response aloud", exact: true })
@@ -682,9 +688,11 @@ test("Fish MP3 playback animates the orb and microphone cancels speech", async (
     .fill("Please get the current UTC time.");
   await a.page.getByRole("button", { name: "Send message" }).click();
   await expect(
-    a.page.getByText("The current time was retrieved successfully.", {
-      exact: true,
-    }),
+    a.page
+      .getByText("The current time was retrieved successfully.", {
+        exact: true,
+      })
+      .last(),
   ).toBeVisible();
   await a.page
     .getByRole("button", { name: "Read response aloud", exact: true })
@@ -694,7 +702,10 @@ test("Fish MP3 playback animates the orb and microphone cancels speech", async (
     a.page.getByText("Jarvis is speaking…", { exact: true }),
   ).toBeVisible();
   await a.page.getByRole("button", { name: "HOME", exact: true }).click();
-  await expect(a.page.locator(".jarvis-orb")).toHaveClass(/is-active/);
+  await expect(a.page.locator(".neural-plexus canvas")).toHaveAttribute(
+    "data-state",
+    "speaking",
+  );
   await a.page
     .getByRole("button", { name: "Start voice input", exact: true })
     .click();

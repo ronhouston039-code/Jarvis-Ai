@@ -20,9 +20,14 @@ import {
   ChevronRight,
   Brain,
 } from "lucide-react";
-import { JarvisOrb } from "./JarvisOrb";
+import { NeuralPlexus } from "./NeuralPlexus";
+import { HudSubtitles } from "./HudSubtitles";
+import type { FocusAudioMeter } from "./focus-audio";
 
 type Props = {
+  meter: FocusAudioMeter;
+  userCaption: string;
+  assistantCaption: string;
   provider: string;
   speaking?: boolean;
   listening: boolean;
@@ -277,12 +282,34 @@ export function JarvisHud(p: Props) {
                     ? "VOICE INPUT ACTIVE"
                     : "PERSONAL INTELLIGENCE · READY"}
               </div>
-              {p.showChat ? (
+              <div className="hud-hologram">
+                <NeuralPlexus
+                  state={
+                    p.speaking
+                      ? "speaking"
+                      : p.listening
+                        ? "listening"
+                        : p.busy
+                          ? "thinking"
+                          : "idle"
+                  }
+                  meter={p.meter}
+                />
+                <HudSubtitles
+                  userText={p.userCaption}
+                  text={p.assistantCaption}
+                  animate={Boolean(p.speaking || p.busy)}
+                />
+                <button
+                  className="plexus-fullscreen"
+                  onClick={p.onFocus}
+                  data-greeting-skip
+                >
+                  <Maximize2 size={15} /> Full Screen Focus
+                </button>
+              </div>
+              {p.showChat && (
                 <div className="hud-conversation">{p.conversation}</div>
-              ) : (
-                <div className="hud-hologram">
-                  <JarvisOrb active={p.listening || p.busy || p.speaking} />
-                </div>
               )}
             </main>
             <aside className="hud-right">

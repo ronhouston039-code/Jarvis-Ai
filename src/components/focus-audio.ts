@@ -11,7 +11,7 @@ export class FocusAudioMeter {
     HTMLAudioElement,
     MediaElementAudioSourceNode
   >();
-  private samples = new Uint8Array(128);
+  private samples = new Uint8Array(512);
   private generation = 0;
   async enable(): Promise<void> {
     if (!this.context || this.context.state === "closed") {
@@ -48,7 +48,7 @@ export class FocusAudioMeter {
     }
     this.microphone = stream;
     this.micAnalyser = this.context.createAnalyser();
-    this.micAnalyser.fftSize = 256;
+    this.micAnalyser.fftSize = 1024;
     this.micAnalyser.smoothingTimeConstant = 0.65;
     this.micSource = this.context.createMediaStreamSource(stream);
     this.micSource.connect(this.micAnalyser); // No destination connection: prevents microphone feedback.
@@ -76,7 +76,7 @@ export class FocusAudioMeter {
         this.sources.get(audio) ?? this.context.createMediaElementSource(audio);
       this.sources.set(audio, source);
       const analyser = this.context.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 1024;
       analyser.smoothingTimeConstant = 0.65;
       source.connect(analyser);
       analyser.connect(this.context.destination);
@@ -87,18 +87,35 @@ export class FocusAudioMeter {
       /* Leave playback available when the browser cannot attach an analyser. */
     }
   }
-  level(kind: "listening" | "speaking" | "idle" | "thinking"): number {
+  bands(kind: "listening" | "speaking" | "idle" | "thinking") {
     const analyser =
       kind === "listening"
         ? this.micAnalyser
         : kind === "speaking"
           ? this.speechAnalyser
           : undefined;
-    if (!analyser || this.context?.state !== "running") return 0;
+    if (!analyser || this.context?.state !== "running")
+      return { bass: 0, mid: 0, high: 0, level: 0 };
     analyser.getByteFrequencyData(this.samples);
-    let energy = 0;
-    for (const value of this.samples) energy += (value / 255) ** 2;
-    return Math.min(1, Math.sqrt(energy / this.samples.length) * 2.6);
+    const binHz = (this.context.sampleRate || 48000) / 1024;
+    const band = (low: number, high: number) => {
+      const start = Math.max(1, Math.ceil(low / binHz));
+      const end = Math.min(this.samples.length, Math.ceil(high / binHz));
+      let sum = 0;
+      for (let i = start; i < end; i++) sum += (this.samples[i] / 255) ** 2;
+      return Math.min(1, Math.sqrt(sum / Math.max(1, end - start)) * 2.6);
+    };
+    let sum = 0;
+    for (const sample of this.samples) sum += (sample / 255) ** 2;
+    return {
+      bass: band(20, 250),
+      mid: band(250, 2000),
+      high: band(2000, 9000),
+      level: Math.min(1, Math.sqrt(sum / this.samples.length) * 2.6),
+    };
+  }
+  level(kind: "listening" | "speaking" | "idle" | "thinking") {
+    return this.bands(kind).level;
   }
   close() {
     this.stopMicrophone();
