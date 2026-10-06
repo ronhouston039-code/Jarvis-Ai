@@ -25,7 +25,7 @@ export function useHomeDashboard() {
   });
   const activeRequest = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
-    activeRequest.current?.abort();
+    activeRequest.current?.abort("replacement");
     if (!isReady || !isSignedIn || !userId) {
       setStored({
         userId,
@@ -44,12 +44,21 @@ export function useHomeDashboard() {
   }, [isReady, isSignedIn, userId]);
   useEffect(() => {
     void refresh();
+    const visibility = () => {
+      if (document.hidden) activeRequest.current?.abort("background");
+      else void refresh();
+    };
+    const pagehide = () => activeRequest.current?.abort("background");
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", pagehide);
     const timer = window.setInterval(() => {
       if (!document.hidden) void refresh();
     }, 60000);
     return () => {
       window.clearInterval(timer);
-      activeRequest.current?.abort();
+      activeRequest.current?.abort("dispose");
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", pagehide);
     };
   }, [refresh]);
   const snapshot =

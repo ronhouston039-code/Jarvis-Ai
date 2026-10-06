@@ -6,10 +6,9 @@ export const SAVED_VAMP_URL =
   "shortcuts://run-shortcut?name=Vamp%20iPhone%20%26%20Music";
 const saved: Array<{ page: Page; recordId: string }> = [];
 
-/** Create the same persisted connection that the Connections Play link uses. */
+/** Create the same persisted connection that the Connections Play review uses. */
 export async function saveVampConnection(page: Page) {
   const pauseName = `Test pause ${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const pauseUrl = `shortcuts://run-shortcut?name=${encodeURIComponent(pauseName)}`;
   await page.goto("/connections?tab=music");
   await page
     .getByRole("textbox", { name: "Device display name" })
@@ -35,7 +34,7 @@ export async function saveVampConnection(page: Page) {
   const cards = page.locator("section.personal-card").filter({
     has: page.getByRole("heading", { name: "Play Vamp", exact: true }),
   });
-  const pause = page.locator(`a[href="${pauseUrl}"]`);
+  const pause = page.locator(`button[data-shortcut-name="${pauseName}"]`);
   const card = cards.filter({ has: pause });
   await expect(card).toBeVisible();
   // Clear leftovers from interrupted runs, using the normal owned connection API.
@@ -50,8 +49,8 @@ export async function saveVampConnection(page: Page) {
   }
   await expect(cards).toHaveCount(1);
   await expect(
-    card.getByRole("link", { name: "Play", exact: true }),
-  ).toHaveAttribute("href", SAVED_VAMP_URL);
+    card.getByRole("button", { name: "Play", exact: true }),
+  ).toHaveAttribute("data-shortcut-name", SAVED_VAMP_SHORTCUT);
 }
 
 export async function cleanupVampConnections() {

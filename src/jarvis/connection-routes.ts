@@ -1,7 +1,7 @@
 import { homeActionSchema } from "./home-assistant-contracts";
 import { rokuAction } from "./roku";
 import { musicLinkInput } from "./music-links";
-import { weatherSnapshot, findCities } from "./weather";
+import { resolveWeather, findCities } from "./weather";
 import { usableAppleMusicToken } from "./apple-music-config";
 import type { Hono } from "hono";
 import { createUserToolExecutor, resolveAppMembership } from "deepspace/worker";
@@ -232,33 +232,9 @@ export function registerConnectionRoutes(app: Hono<AppContext>) {
       auth.userId,
       c.req.raw.signal,
     );
-    const found = (await execute("records.query", {
-      collection: "locations",
-      where: { userId: auth.userId, enabled: 1 },
-      limit: 1,
-    })) as { success: boolean; data?: { records?: { data: unknown }[] } };
-    const data = found.data?.records?.[0]?.data as
-      | Record<string, unknown>
-      | undefined;
-    const location = locationInput.safeParse(
-      data
-        ? {
-            label: data.label,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            enabled: 1,
-          }
-        : null,
-    );
-    if (!location.success) return c.json({ error: "location_required" }, 409);
     try {
       return c.json(
-        await weatherSnapshot(
-          location.data.latitude,
-          location.data.longitude,
-          location.data.label,
-          c.env.OPENWEATHER_API_KEY,
-        ),
+        await resolveWeather(execute, {}, c.env.OPENWEATHER_API_KEY, c.req.raw.signal),
       );
     } catch {
       return c.json({ error: "weather_unavailable" }, 502);

@@ -1,13 +1,16 @@
+import { useTacticalMap } from "./maps/TacticalMapProvider";
 import { HomeAssistantConnection } from "./HomeAssistantConnection";
 import { MusicPlaylistLinks } from "./MusicPlaylistLinks";
 import { WeatherConnect } from "./WeatherConnect";
 import { AppleMusicConnect } from "./AppleMusicConnect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "deepspace";
 import { useSearchParams } from "react-router-dom";
 import { authenticatedFetch } from "../jarvis/client";
 import { shortcutUrl } from "../jarvis/connections";
-import { Button, Input } from "./ui";
+import { Button, Input, Modal } from "./ui";
+import { useVampShortcut } from "./devices/useVampShortcut";
+import { VampShortcutDialog } from "./devices/VampShortcutDialog";
 
 type Device = {
   name: string;
@@ -23,6 +26,7 @@ type Location = {
   enabled: number;
 };
 type LiveData = {
+  unit?: "fahrenheit" | "celsius";
   source?: string;
   retrievedAt?: string;
   temperature?: number;
@@ -66,7 +70,7 @@ function LiveResults({ data }: { data: LiveData }) {
       </p>
       {typeof data.temperature === "number" && (
         <>
-          <h3>{data.temperature}°F</h3>
+          <h3>{data.temperature}{data.unit === "celsius" ? "°C" : "°F"}</h3>
           <p>
             {data.description} · Feels like {data.feelsLike}°F
           </p>
@@ -127,6 +131,8 @@ const tabs = [
   "vehicle",
 ] as const;
 export function JarvisConnections() {
+  const tacticalMap = useTacticalMap();
+  const vamp = useVampShortcut();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "apps";
   const { records: devices } = useQuery<Device>("device-shortcuts", {
@@ -147,6 +153,15 @@ export function JarvisConnections() {
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState<LiveData | null>(null);
   const [query, setQuery] = useState("");
+  const [review, setReview] = useState<{ recordId: string; name: string; kind: string; action: "on" | "off"; shortcut: string } | null>(null);
+  const reviewRef = useRef(review);
+  reviewRef.current = review;
+  const cancelReview = () => { reviewRef.current = null; setReview(null); };
+  const currentReview = review && devices.find(d => d.recordId === review.recordId && d.data.enabled === 1 && d.data.name === review.name && d.data.kind === review.kind && (review.action === "on" ? d.data.onShortcut : d.data.offShortcut) === review.shortcut);
+  function reviewShortcut(d: typeof devices[number], action: "on" | "off") {
+    if (d.data.name === "Play Vamp" && d.data.kind === "music" && action === "on" && vamp.supported) { vamp.request(); return; }
+    setReview({ recordId: d.recordId, name: d.data.name, kind: d.data.kind, action, shortcut: action === "on" ? d.data.onShortcut : d.data.offShortcut });
+  }
   useEffect(() => {
     const l = locations[0]?.data;
     if (l) {
@@ -234,23 +249,17 @@ export function JarvisConnections() {
             <h3>{d.data.name}</h3>
             <p>{d.data.kind} · Apple Shortcuts · State unavailable</p>
             <p className="muted text-sm">
-              Your iPhone runs the shortcut after you tap. JARVIS cannot verify
+              Your iPhone runs the shortcut after review and confirmation. JARVIS cannot verify
               device state.
             </p>
             <div className="connection-actions">
-              <a
-                className="connection-action"
-                href={shortcutUrl(d.data.onShortcut)}
-              >
+              <Button data-shortcut-name={d.data.onShortcut} onClick={() => reviewShortcut(d, "on")}>
                 {music ? "Play" : "Turn on"}
-              </a>
+              </Button>
               {d.data.offShortcut && (
-                <a
-                  className="connection-action"
-                  href={shortcutUrl(d.data.offShortcut)}
-                >
+                <Button data-shortcut-name={d.data.offShortcut} onClick={() => reviewShortcut(d, "off")}>
                   {music ? "Pause" : "Turn off"}
-                </a>
+                </Button>
               )}
               <Button
                 variant="outline"
@@ -270,6 +279,29 @@ export function JarvisConnections() {
       ));
   return (
     <div className="personal-page connection-page">
+      <VampShortcutDialog controls={vamp} onDispatched={() => setStatus("Playback requested — awaiting confirmation")} />
+      <Modal open={review !== null} onClose={cancelReview} size="sm">
+        <Modal.Header><Modal.Title>Review Shortcut request</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <p>{review?.name} · {review?.kind === "music" ? review.action === "on" ? "Play" : "Pause" : review?.action === "on" ? "Turn on" : "Turn off"}</p>
+          <p>Shortcut: {review?.shortcut}. This asks your iPhone to run the saved action. Completion cannot be verified from Safari.</p>
+          {!currentReview && <p role="alert">The saved connection changed or is unavailable. Cancel and review it again.</p>}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" onClick={cancelReview}>Cancel</Button>
+          <Button disabled={!currentReview} onClick={() => {
+            const pending = reviewRef.current;
+            if (!pending || pending !== review || !currentReview || (navigator.userActivation && !navigator.userActivation.isActive)) return;
+            cancelReview();
+            try {
+              const url = shortcutUrl(pending.shortcut);
+              const event = new CustomEvent("jarvis-connection-shortcut-launch", { cancelable: true, detail: { name: pending.name, url } });
+              if (window.dispatchEvent(event)) window.location.assign(url);
+              setStatus(`Shortcut request dispatched: ${pending.name} · ${new Date().toLocaleString()} · Completion unverified`);
+            } catch { setStatus("Shortcut request could not be dispatched. No completion was confirmed."); }
+          }}>Send Request</Button>
+        </Modal.Footer>
+      </Modal>
       <p className="eyebrow">YOUR CONNECTED WORLD</p>
       <h1>Connections</h1>
       <nav className="connection-tabs" aria-label="Connections sections">
@@ -329,6 +361,7 @@ export function JarvisConnections() {
       {tab === "location" && (
         <>
           <h2>Your location</h2>
+          <Button onClick={() => tacticalMap.request()}>Open tactical map</Button>
           <p>
             Save a place manually, or request GPS once. Coordinates are shared
             with Open-Meteo only when you ask for weather. Your saved location

@@ -1,5 +1,12 @@
+import { openHomeMenu, mockHomeMapTiles } from "./helpers/home-controls";
 import { test, expect, loadAllTestAccounts } from "deepspace/testing";
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
+async function prepareFocus(page: import("@playwright/test").Page) {
+  await mockHomeMapTiles(page);
+  await page.route("**/api/health", r => r.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/jarvis/connections/home-assistant/config", r => r.fulfill({ json: { enabled: false, available: false } }));
+  await page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: { location: "Goldsboro", temperature: 70, feelsLike: 68, description: "Clear", retrievedAt: "2026-10-05T12:00:00Z" } }));
+}
 test("Focus view has live microphone analysis, interim captions, keyboard and clean exit", async ({
   users,
 }) => {
@@ -38,8 +45,10 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
       return target.stream;
     };
   });
+  await prepareFocus(a.page);
   await a.page.goto("/home");
-  await a.page.getByRole("button", { name: "Open Jarvis Focus Mode" }).click();
+  await openHomeMenu(a.page);
+  await a.page.getByRole("button", { name: "Full Screen Focus", exact: true }).click();
   const focus = a.page.getByRole("region", { name: "Jarvis Focus Mode" });
   await expect(focus).toBeVisible();
   await expect(
@@ -132,8 +141,9 @@ test("Focus view has live microphone analysis, interim captions, keyboard and cl
   await expect(a.page.locator("svg[data-renderer=svg]")).toBeVisible();
   await a.page.keyboard.press("Escape");
   await expect(focus).not.toBeVisible();
+  await openHomeMenu(a.page);
   await expect(
-    a.page.getByRole("button", { name: "Open Jarvis Focus Mode" }),
+    a.page.getByRole("button", { name: "Full Screen Focus", exact: true }),
   ).toBeVisible();
 });
 
@@ -151,8 +161,11 @@ test("Focus orb analyses actual MP3 playback and Stop cancels speech", async ({
       body: Buffer.from(startupAudio, "base64"),
     }),
   );
+  await a.page.route("**/api/tts", r => r.fulfill({ contentType: "audio/mpeg", body: Buffer.from(startupAudio, "base64") }));
+  await prepareFocus(a.page);
   await a.page.goto("/home");
-  await a.page.getByRole("button", { name: "Open Jarvis Focus Mode" }).click();
+  await openHomeMenu(a.page);
+  await a.page.getByRole("button", { name: "Full Screen Focus", exact: true }).click();
   await a.page.getByRole("button", { name: "Show Focus keyboard" }).click();
   await a.page
     .getByRole("textbox", { name: "Message JARVIS in Focus Mode" })
@@ -195,17 +208,26 @@ test("continuous voice starts Focus, rearms after speech, and ends locally", asy
   );
   let release!: () => void;
   let voiceRequests = 0;
+  // Isolate this speech lifecycle check from any saved location's live provider.
+  await a.page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: {
+    location: "Test location", temperature: 70, feelsLike: 68,
+    retrievedAt: "2026-10-05T12:00:00Z", description: "Clear", high: 75, low: 55,
+  } }));
   const ready = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await a.page.route("**/api/jarvis/voice/greeting", async (r) => {
+  // Until required health checks are verified, repeat greeting uses a truthful
+  // status through TTS; both routes share the same controlled playback boundary.
+  const greetingPlayback = async (r: import("@playwright/test").Route) => {
     voiceRequests++;
     await ready;
     return r.fulfill({
       contentType: "audio/mpeg",
       body: Buffer.from(startupAudio, "base64"),
     });
-  });
+  };
+  await a.page.route("**/api/jarvis/voice/greeting", greetingPlayback);
+  await a.page.route("**/api/tts", greetingPlayback);
   await a.page.addInitScript(() => {
     const state = window as unknown as {
       recognition: { onresult?: (e: unknown) => void };
@@ -241,7 +263,9 @@ test("continuous voice starts Focus, rearms after speech, and ends locally", asy
       return target.stream;
     };
   });
+  await prepareFocus(a.page);
   await a.page.goto("/home");
+  await openHomeMenu(a.page);
   await a.page
     .getByRole("button", { name: "Start continuous voice session" })
     .click();
@@ -319,11 +343,13 @@ test("unsupported WebGL uses SVG without throwing", async ({ users }) => {
       return original.apply(this, args);
     } as typeof original;
   });
+  await prepareFocus(a.page);
   await a.page.goto("/home?mode=focus");
   await expect(a.page.locator("svg[data-renderer=svg]")).toBeVisible();
   await expect(a.page.locator(".jarvis-focus canvas")).toHaveCount(0);
   expect(errors).toEqual([]);
   await a.page.getByRole("button", { name: "Exit Focus Mode" }).click();
+  await openHomeMenu(a.page);
   await expect(
     a.page.getByRole("button", { name: "Full Screen Focus", exact: true }),
   ).toBeVisible();
@@ -370,6 +396,7 @@ test("failed WebGL initialization disposes listeners and falls back to SVG", asy
       }
     };
   });
+  await prepareFocus(a.page);
   await a.page.goto("/home?mode=focus");
   await expect(a.page.locator("svg[data-renderer=svg]")).toBeVisible();
   await expect(a.page.locator(".jarvis-focus canvas")).toHaveCount(0);
@@ -393,6 +420,7 @@ test("mobile dashboard is one column with an accessible bottom microphone", asyn
 }) => {
   const [a] = await users(1);
   await a.page.setViewportSize({ width: 390, height: 844 });
+  await prepareFocus(a.page);
   await a.page.goto("/home");
   await expect(
     a.page.getByRole("button", { name: "Start voice input", exact: true }),
@@ -403,7 +431,7 @@ test("mobile dashboard is one column with an accessible bottom microphone", asyn
       .getBoundingClientRect();
     const main = document.querySelector(".hud-main")!.getBoundingClientRect();
     const support = document
-      .querySelector(".hud-support")!
+      .querySelector(".j-home-map")!
       .getBoundingClientRect();
     const mic = document
       .querySelector('[aria-label="Start voice input"]')!

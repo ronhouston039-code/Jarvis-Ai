@@ -186,11 +186,13 @@ describe("Home Assistant bridge", () => {
     const provider = new HomeAssistantProvider(base, token, policy, fetcher);
     const devices = await provider.listDevices();
     const light = devices.find((d) => d.type === "light")!;
+    await expect(provider.execute({ deviceId: light.id, action: "on" })).rejects.toThrow("home_assistant_confirmation_required");
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
     await provider.execute({
       deviceId: light.id,
       action: "brightness",
       value: 30,
-    });
+    }, true);
     const posted = fetcher.mock.calls.find(([url]) =>
       String(url).endsWith("/api/services/light/turn_on"),
     )!;
@@ -211,7 +213,7 @@ describe("Home Assistant bridge", () => {
       action: "temperature",
       value: 20,
       unit: "C",
-    });
+    }, true);
     const climatePost = fetcher.mock.calls.find(([url]) =>
       String(url).endsWith("/api/services/climate/set_temperature"),
     )!;
@@ -326,6 +328,44 @@ describe("Home Assistant bridge", () => {
       vi.unstubAllGlobals();
       db.close();
     }
+  });
+  it("requires exact review for ordinary device actions, while status stays read-only", async () => {
+    const { sql, env, db } = ledger();
+    const fetcher = mockHome(); vi.stubGlobal("fetch", fetcher);
+    try {
+      const provider = new HomeAssistantProvider(base, token, policy);
+      const light = (await provider.listDevices()).find(d => d.type === "light")!;
+      expect(light.confirmationActions).toContain("brightness");
+      const input = { deviceId: light.id, action: "brightness", value: 35 };
+      const read = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_action", action: { deviceId: light.id, action: "status" } });
+      expect((await read.json() as { status: string }).status).toBe("completed");
+      const review = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_action", action: input });
+      const body = await review.json() as { status: string; token: string; action: unknown; executed: boolean };
+      expect(body.status).toBe("confirmation_required"); expect(body.executed).toBe(false); expect(body.action).toEqual(input);
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+      await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_cancel", token: body.token });
+      expect((await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_approve", token: body.token })).status).toBe(409);
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+      const next = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_action", action: input });
+      const approved = await next.json() as { token: string };
+      const sent = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_approve", token: approved.token });
+      expect((await sent.json() as { status: string }).status).toBe("accepted");
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+      expect((await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_approve", token: approved.token })).status).toBe(409);
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    } finally { vi.unstubAllGlobals(); db.close(); }
+  });
+  it("expired device approval cannot issue a provider mutation", async () => {
+    const { sql, env, db } = ledger(); const fetcher = mockHome(); vi.stubGlobal("fetch", fetcher);
+    try {
+      const light = (await new HomeAssistantProvider(base, token, policy).listDevices()).find(d => d.type === "light")!;
+      const response = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_action", action: { deviceId: light.id, action: "on" } });
+      const approval = await response.json() as { token: string };
+      db.prepare("UPDATE approvals SET expires=0 WHERE token=?").run(approval.token);
+      const rejected = await handleHomeAssistant(sql, env, { userId: "owner", operation: "home_approve", token: approval.token });
+      expect(rejected.status).toBe(409);
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    } finally { vi.unstubAllGlobals(); db.close(); }
   });
   it("returns safe provider errors without raw credentials or provider error contents", async () => {
     const { sql, env, db } = ledger();

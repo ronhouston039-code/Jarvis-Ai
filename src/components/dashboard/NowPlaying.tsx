@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useSystemHealth } from "../SystemHealthProvider";
+import { serviceHealth } from "../system-health";
 import { Link } from "react-router-dom";
 import { useAuthProfileReady } from "deepspace";
 import { Music, Pause, Play, SkipBack, SkipForward } from "lucide-react";
@@ -37,6 +39,7 @@ type NowPlayingProps = {
 };
 
 export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
+  const { controller } = useSystemHealth();
   const auth = useAuthProfileReady({ requireUser: true });
   const userId = auth.isReady && auth.isSignedIn ? auth.userId : null;
   const identity = useRef(userId);
@@ -61,6 +64,12 @@ export function NowPlaying({ vamp, onPlayVamp }: NowPlayingProps = {}) {
   // Hide a previous account's snapshot during render, before effect cleanup runs.
   const view = userId && stored.userId === userId ? stored : emptyView(userId);
   const { playback, setup, busy, message } = view;
+  useEffect(() => {
+    if (!userId) return;
+    const current = controller.getSnapshot().services.find(s => s.id === "music")!;
+    if (playback.authorized) controller.update(serviceHealth("music", true, "online", "verified", false, new Date().toISOString()));
+    else if (current.reason === "verified") controller.update(serviceHealth("music", current.enabled, "unknown", "awaiting-check"));
+  }, [controller, userId, playback.authorized, setup, message]);
   const session = useRef<{
     userId: string;
     music: MusicKitInstance | null;

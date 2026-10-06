@@ -1,4 +1,15 @@
 /** Local visualization only. Mic analysis never connects to the speakers or uploads audio. */
+export class AudioPreparationError extends Error {
+  constructor(readonly category: "blocked" | "browser-error") {
+    super(
+      category === "blocked"
+        ? "Audio preparation was blocked. Tap Talk Mode and check your audio output."
+        : "Audio preparation failed in the browser. Tap Talk Mode and check your audio output.",
+    );
+    this.name = "AudioPreparationError";
+  }
+}
+
 export class FocusAudioMeter {
   private context?: AudioContext;
   private microphone?: MediaStream;
@@ -27,7 +38,17 @@ export class FocusAudioMeter {
       this.context = new Constructor();
       this.sources = new WeakMap();
     }
-    if (this.context.state !== "running") await this.context.resume();
+    // Call resume synchronously even when a freshly created context reports
+    // running; Safari's user-gesture preparation must use the real audio path.
+    try {
+      await this.context.resume();
+    } catch (error) {
+      throw new AudioPreparationError(
+        error instanceof Error && error.name === "NotAllowedError"
+          ? "blocked"
+          : "browser-error",
+      );
+    }
   }
   async startMicrophone(): Promise<boolean> {
     this.stopMicrophone();

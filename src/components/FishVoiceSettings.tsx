@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { useUser } from "deepspace";
+import { useSystemHealth } from "./SystemHealthProvider";
+import { useAuthStatus } from "deepspace";
 import { Button } from "./ui";
-import { JarvisSpeechPlayer, type VoiceSpeed } from "./jarvis-speech";
+import {
+  JarvisSpeechPlayer,
+  fishVoiceFailureText,
+  type FishVoiceFailure,
+  type VoiceSpeed,
+} from "./jarvis-speech";
+import type { DeviceVoicePhase } from "./device-speech";
 export function FishVoiceSettings() {
-  const { user } = useUser();
+  const health = useSystemHealth();
+  const { userId } = useAuthStatus();
   const [speed, setSpeed] = useState<VoiceSpeed>(() => {
     try {
-      const saved = sessionStorage.getItem(`jarvis-voice-speed:${user?.id}`);
+      const saved = sessionStorage.getItem(`jarvis-voice-speed:${userId}`);
       return saved === "slow" || saved === "fast" ? saved : "normal";
     } catch {
       return "normal";
@@ -14,10 +22,21 @@ export function FishVoiceSettings() {
   });
   const [speaking, setSpeaking] = useState(false);
   const [status, setStatus] = useState("");
+  const [devicePhase, setDevicePhase] = useState<DeviceVoicePhase | null>(null);
+  const [providerFailure, setProviderFailure] =
+    useState<FishVoiceFailure | null>(null);
   const speaker = useRef<JarvisSpeechPlayer | null>(null);
   if (!speaker.current)
-    speaker.current = new JarvisSpeechPlayer(setSpeaking, setStatus);
-  useEffect(() => () => speaker.current?.stop(), []);
+    speaker.current = new JarvisSpeechPlayer(
+      setSpeaking,
+      setStatus,
+      undefined,
+      undefined,
+      undefined,
+      setProviderFailure,
+      health.voiceEvidence,
+    );
+  useEffect(() => () => speaker.current?.dispose(), []);
   return (
     <section aria-label="Fish Audio voice settings">
       <h2>JARVIS SPEAKING VOICE</h2>
@@ -35,7 +54,7 @@ export function FishVoiceSettings() {
             const next = event.target.value as VoiceSpeed;
             setSpeed(next);
             try {
-              sessionStorage.setItem(`jarvis-voice-speed:${user?.id}`, next);
+              sessionStorage.setItem(`jarvis-voice-speed:${userId}`, next);
             } catch {
               /* Normal playback works without storage. */
             }
@@ -49,21 +68,50 @@ export function FishVoiceSettings() {
       <p>Test phrase: “Good afternoon. Jarvis voice systems are online.”</p>
       <div className="connection-actions">
         <Button
-          onClick={() =>
+          onClick={() => {
+            speaker.current?.primeFromGesture();
             void speaker.current?.speak(
               "Good afternoon. Jarvis voice systems are online.",
               speed,
-            )
-          }
+            );
+          }}
         >
           Test voice
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            speaker.current?.testDeviceVoice(setDevicePhase, speed);
+          }}
+        >
+          Test Device Voice
         </Button>
         <Button variant="outline" onClick={() => speaker.current?.stop()}>
           Stop
         </Button>
       </div>
       {speaking && <p role="status">Jarvis is speaking…</p>}
+      {devicePhase && (
+        <p role="status" aria-label="Device voice test status">
+          {devicePhase === "starting"
+            ? "Waiting for device voice…"
+            : devicePhase === "started"
+              ? "Device voice started."
+              : devicePhase === "completed"
+                ? "Device voice completed."
+                : devicePhase === "blocked"
+                  ? "Device voice blocked."
+                  : devicePhase === "browser-error"
+                    ? "Device voice browser error."
+                    : "Device voice cancelled."}
+        </p>
+      )}
       <p role="status">{status}</p>
+      {providerFailure && (
+        <p role="status" aria-label="Fish Audio failure status">
+          {fishVoiceFailureText(providerFailure)}
+        </p>
+      )}
     </section>
   );
 }

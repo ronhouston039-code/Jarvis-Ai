@@ -140,3 +140,25 @@ test("partial speech analysis failure restores direct playback and releases it o
   meter.close();
   expect(f.context.close).toHaveBeenCalledOnce();
 });
+
+test("running context resume happens synchronously in the gesture path", async () => {
+  const f = setup(), meter = new FocusAudioMeter();
+  const pending = meter.enable();
+  expect(f.context.resume).toHaveBeenCalledOnce();
+  await pending;
+  meter.close();
+});
+
+test.each(["NotAllowedError", "InvalidStateError"])(
+  "resume rejection %s is sanitized and does not start microphone capture",
+  async (name) => {
+    const f = setup(), meter = new FocusAudioMeter();
+    f.context.resume.mockRejectedValue(new DOMException("private browser diagnostics", name));
+    await expect(meter.startMicrophone()).rejects.toMatchObject({
+      name: "AudioPreparationError",
+      category: name === "NotAllowedError" ? "blocked" : "browser-error",
+    });
+    expect(f.getUserMedia).not.toHaveBeenCalled();
+    meter.close();
+  },
+);

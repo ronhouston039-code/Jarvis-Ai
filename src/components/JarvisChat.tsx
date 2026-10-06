@@ -1,6 +1,17 @@
+import { useTacticalMap } from "./maps/TacticalMapProvider";
+import { mapIntent } from "./maps/map-location";
+import { WebSearchResults } from "./WebSearchResults";
+import { searchIntent } from "./search-intent";
+import { searchMessages, type SearchResult } from "../jarvis/search-contracts";
 import { DashboardLayout } from "./layout/DashboardLayout";
+import { useSystemHealth } from "./SystemHealthProvider";
+import { healthSummary, spokenHealth } from "./system-health";
+import { serviceHealth } from "./system-health";
+import { requestLocation } from "./WeatherConnect";
+import { weatherIntent, weatherReply, type WeatherIntent } from "./weather-intent";
+import type { WeatherSnapshot } from "../jarvis/weather";
 import { JarvisFocus } from "./JarvisFocus";
-import { FocusAudioMeter } from "./focus-audio";
+import { AudioPreparationError, FocusAudioMeter } from "./focus-audio";
 import { VoiceActivityDetector, wakeRequest } from "./voice/voice-activity";
 import { useTVShortcuts } from "./devices/useTVShortcuts";
 import { parseTvPowerIntent } from "./devices/tv-intent";
@@ -18,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, listDeepSpaceAgentModels } from "deepspace";
 import {
   ArrowUp,
+  Keyboard,
   Mic,
   Square,
   Volume2,
@@ -61,6 +73,8 @@ type SpeechWindow = Window & {
 const models = listDeepSpaceAgentModels("application");
 const model = (models.find((m) => m.id === "gpt-6-luna") ?? models[0])?.id;
 export function JarvisChat({ userId }: { userId: string }) {
+  const health = useSystemHealth();
+  const tacticalMap = useTacticalMap();
   const tvShortcuts = useTVShortcuts();
   const vampShortcut = useVampShortcut();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -70,7 +84,9 @@ export function JarvisChat({ userId }: { userId: string }) {
   if (!meter.current) meter.current = new FocusAudioMeter();
   const [transcript, setTranscript] = useState("");
   const [spokenCaption, setSpokenCaption] = useState("");
+  const [weatherDetails, setWeatherDetails] = useState("");
   const [chatId, setChatId] = useState<string | null>(null);
+  useEffect(() => { setSpokenCaption(""); }, [chatId]);
   const [showChat, setShowChat] = useState(false);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
@@ -90,6 +106,19 @@ export function JarvisChat({ userId }: { userId: string }) {
   } | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [preparingSpeech, setPreparingSpeech] = useState(false);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [searchActivity, setSearchActivity] = useState<{ id: string; message: string; timestamp: string }[]>([]);
+  const [searchPending, setSearchPending] = useState(false);
+  const searchRequest = useRef<AbortController | null>(null);
+  const cancelSearch = useCallback((reason: string) => {
+    const request = searchRequest.current;
+    searchRequest.current = null;
+    request?.abort(reason);
+    setSearchPending(false);
+    if (request) setSpokenCaption(current => current === "Searching the web..." ? "Search cancelled." : current);
+  }, []);
+  const [weatherPending, setWeatherPending] = useState(false);
+  const weatherRequest = useRef<AbortController | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
       return sessionStorage.getItem(`jarvis-voice-feedback:${userId}`) === "on";
@@ -106,6 +135,9 @@ export function JarvisChat({ userId }: { userId: string }) {
         meter.current?.attachSpeech(audio);
       },
       setPreparingSpeech,
+      () => meter.current?.enable(),
+      undefined,
+      health.voiceEvidence,
     );
   const pendingSpeech = useRef<{
     previousIds: Set<string>;
@@ -160,10 +192,13 @@ export function JarvisChat({ userId }: { userId: string }) {
     } catch {
       /* Playback still works without storage. */
     }
-    setSpokenCaption("Playing your saved greeting.");
+    const services = health.controller.getSnapshot().services;
+    const verified = healthSummary(services).state === "online";
+    setSpokenCaption(verified ? "Playing your saved greeting." : spokenHealth(services));
     void enableAudio();
-    await speaker.current?.greet(speed);
-  }, [userId]);
+    if (verified) await speaker.current?.greet(speed);
+    else await speaker.current?.speak(spokenHealth(services), speed);
+  }, [userId, health.controller]);
   useEffect(() => {
     if (!voiceEnabled || !capabilities?.fishVoice) return;
     try {
@@ -179,6 +214,7 @@ export function JarvisChat({ userId }: { userId: string }) {
         return;
       window.removeEventListener("pointerdown", begin);
       window.removeEventListener("keydown", begin);
+      speaker.current?.primeFromGesture();
       void playGreeting();
     };
     window.addEventListener("pointerdown", begin);
@@ -200,6 +236,9 @@ export function JarvisChat({ userId }: { userId: string }) {
     void enableAudio();
     void speaker.current?.speak(text, speed);
   }
+  useEffect(() => {
+    health.setVoiceEnabled(voiceEnabled);
+  }, [voiceEnabled, health.controller]);
   const bottom = useRef<HTMLDivElement>(null);
   const where = useMemo(
     () => ({ chatId: chatId ?? "__none__", userId }),
@@ -229,10 +268,17 @@ export function JarvisChat({ userId }: { userId: string }) {
     modelId: model,
     onChatCreated: setChatId,
   });
+  useEffect(() => {
+    if (!voiceEnabled || speaking || preparingSpeech || listening || isLoading || weatherPending || searchPending ||
+        pendingSpeech.current || !speaker.current?.canSpeakAutomatically() ||
+        health.services.find(s => s.id === "voice")?.status === "offline") return;
+    const warning = health.controller.takeAnnouncement();
+    if (warning) speak(warning);
+  }, [health.services, health.controller, voiceEnabled, speaking, preparingSpeech, listening, isLoading, weatherPending, searchPending]);
   const { visualState, requestAction, clearAction } = useAssistantVisualState({
     speaking,
     listening,
-    processing: isLoading || preparingSpeech,
+    processing: isLoading || preparingSpeech || weatherPending || searchPending,
     error:
       voiceError ||
       (error ? "Could not complete your request. Please try again." : ""),
@@ -302,6 +348,8 @@ export function JarvisChat({ userId }: { userId: string }) {
   }, [isLoading, error, records, inFlight, voiceEnabled, focusMode]);
   function toggleVoice() {
     if (voiceEnabled) {
+      cancelSearch("voice-disabled");
+      weatherRequest.current?.abort("voice-disabled"); setWeatherPending(false);
       setVoiceError("");
       pendingSpeech.current = null;
       speaker.current?.stop();
@@ -313,6 +361,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       }
       setVoiceEnabled(false);
     } else {
+      speaker.current?.primeFromGesture();
       try {
         sessionStorage.setItem(`jarvis-voice-feedback:${userId}`, "on");
       } catch {
@@ -324,6 +373,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     }
   }
   function stopResponse() {
+    cancelSearch("stop");
+    weatherRequest.current?.abort("stop"); setWeatherPending(false);
     clearAction();
     setVoiceError("");
     pendingSpeech.current = null;
@@ -333,9 +384,11 @@ export function JarvisChat({ userId }: { userId: string }) {
   }
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [records, inFlight]);
+  }, [records, inFlight, searchResult]);
   useEffect(() => {
     const end = () => {
+      cancelSearch("background");
+      weatherRequest.current?.abort("background"); setWeatherPending(false);
       sessionActive.current = false;
       wakeActivatedUntil.current = 0;
       sessionMode.current = null;
@@ -345,17 +398,24 @@ export function JarvisChat({ userId }: { userId: string }) {
       cancelRecognition();
       meter.current?.stopMicrophone();
       setListening(false);
-      speaker.current?.stop();
+      speaker.current?.stop("background");
     };
-    document.addEventListener("visibilitychange", end);
+    const visibility = () => {
+      if (document.hidden) end();
+    };
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", end);
     return () => {
       end();
-      speaker.current?.stop();
+      speaker.current?.dispose();
       meter.current?.close();
-      document.removeEventListener("visibilitychange", end);
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", end);
     };
-  }, [cancelRecognition]);
+  }, [cancelRecognition, cancelSearch]);
   const endVoiceSession = useCallback(() => {
+    cancelSearch("stop");
+    weatherRequest.current?.abort("stop"); setWeatherPending(false);
     clearAction();
     setVoiceError("");
     sessionActive.current = false;
@@ -367,8 +427,9 @@ export function JarvisChat({ userId }: { userId: string }) {
     cancelRecognition();
     speaker.current?.stop();
     setListening(false);
-  }, [cancelRecognition, clearAction]);
-  async function dictate() {
+  }, [cancelRecognition, clearAction, cancelSearch]);
+  async function dictate(fromGesture = false) {
+    if (fromGesture) { cancelSearch("interruption"); weatherRequest.current?.abort("interruption"); setWeatherPending(false); }
     if (listening) {
       cancelRecognition();
       meter.current?.stopMicrophone();
@@ -379,6 +440,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     pendingSpeech.current = null;
     if (isLoading) stop();
     speaker.current?.stop();
+    if (fromGesture) speaker.current?.primeFromGesture();
     setSpeaking(false);
     const Constructor =
       (window as SpeechWindow).SpeechRecognition ??
@@ -478,7 +540,7 @@ export function JarvisChat({ userId }: { userId: string }) {
           return;
         }
       } catch (failure) {
-        if (focusRef.current) throw failure;
+        if (failure instanceof AudioPreparationError || focusRef.current) throw failure;
         // Browser dictation can still request its own microphone on devices without Web Audio capture.
       }
       if (speech.current !== recognition) return;
@@ -488,7 +550,7 @@ export function JarvisChat({ userId }: { userId: string }) {
         return;
       }
       recognition.start();
-    } catch {
+    } catch (failure) {
       if (speech.current !== recognition) return;
       cancelRecognition();
       sessionActive.current = false;
@@ -498,7 +560,9 @@ export function JarvisChat({ userId }: { userId: string }) {
       meter.current?.stopMicrophone();
       setListening(false);
       setVoiceError(
-        "Could not start your microphone. Check permission and try again, or use the keyboard.",
+        failure instanceof AudioPreparationError
+          ? failure.message
+          : "Could not start your microphone. Check permission and try again, or use the keyboard.",
       );
     }
   }
@@ -512,6 +576,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       listening ||
       speaking ||
       preparingSpeech ||
+      searchPending || weatherPending ||
       isLoading ||
       error
     )
@@ -526,6 +591,8 @@ export function JarvisChat({ userId }: { userId: string }) {
     listening,
     speaking,
     preparingSpeech,
+    weatherPending,
+    searchPending,
     isLoading,
     error,
   ]);
@@ -595,8 +662,85 @@ export function JarvisChat({ userId }: { userId: string }) {
         meter.current?.stopMicrophone(microphoneLease);
     };
   }, [continuousSession, listening, speaking, cancelRecognition]);
+  async function answerWeather(intent: WeatherIntent) {
+    cancelSearch("replacement");
+    weatherRequest.current?.abort("replacement");
+    const request = new AbortController(); weatherRequest.current = request;
+    setWeatherPending(true);
+    let fallback = "";
+    const query = new URLSearchParams();
+    if (intent.unit) query.set("unit", intent.unit);
+    if (intent.city) query.set("city", intent.city);
+    try {
+      if (intent.currentLocation) {
+        try {
+          const coords = await requestLocation();
+          query.set("lat", String(coords.latitude)); query.set("lon", String(coords.longitude));
+        } catch { query.set("city", "Goldsboro, North Carolina, USA"); fallback = "Location sharing is unavailable. "; }
+      }
+      if (request.signal.aborted) return;
+      const response = await authenticatedFetch(`/api/weather?${query}`, undefined, request.signal);
+      if (request.signal.aborted) return;
+      if (!response.ok) {
+        const result = await response.json() as { error?: string };
+        if (result.error === "city_ambiguous" || result.error === "city_not_found") {
+          const message = "Which city and state or country should I check?";
+          setSpokenCaption(message); if (voiceEnabled || focusRef.current) speak(message); return;
+        }
+        throw new Error("weather_unavailable");
+      }
+      const data = await response.json() as WeatherSnapshot;
+      if (request.signal.aborted) return;
+      if (!Number.isFinite(data.temperature) || !Number.isFinite(data.feelsLike) || !Number.isFinite(Date.parse(data.retrievedAt))) throw new Error("weather_unavailable");
+      health.controller.update(serviceHealth("weather", true, "online", "verified", true, new Date().toISOString()));
+      const reply = fallback + weatherReply(data);
+      setWeatherDetails(reply); setSpokenCaption(reply);
+      if (voiceEnabled || focusRef.current) speak(`In ${data.location}, ${data.description.toLowerCase()} and ${data.temperature} degrees ${data.unit === "celsius" ? "Celsius" : "Fahrenheit"}; feels like ${data.feelsLike}. ${data.rainChance === undefined || data.rainChance === null ? "" : `Today's precipitation chance is ${data.rainChance} percent.`}`);
+    } catch {
+      if (request.signal.aborted) return;
+      health.controller.update(serviceHealth("weather", true, "offline", "provider-unavailable", true, new Date().toISOString()));
+      const reply = "Weather data is unavailable right now, Sir. Please try again shortly.";
+      setSpokenCaption(reply); if (voiceEnabled || focusRef.current) speak(reply);
+    } finally { if (weatherRequest.current === request) setWeatherPending(false); }
+  }
+  async function answerSearch(query: string) {
+    const request = new AbortController(); searchRequest.current = request;
+    setSearchPending(true); setSpokenCaption("Searching the web...");
+    try {
+      const response = await authenticatedFetch("/api/jarvis/search", { query }, request.signal);
+      if (request.signal.aborted) return;
+      if (!response.ok) {
+        const data = await response.json() as { error?: string };
+        const message = data.error === "search_disabled" ? searchMessages.search_disabled : data.error === "search_not_connected" ? searchMessages.search_not_connected : searchMessages.search_unavailable;
+        setSpokenCaption(message); if (voiceEnabled || focusRef.current) speak(message); return;
+      }
+      const data = await response.json() as SearchResult;
+      if (request.signal.aborted) return;
+      if (data.label !== "Live web results" || !Array.isArray(data.sources) || data.sources.length < 2 || typeof data.answer !== "string") throw new Error();
+      setSearchResult(data); setSpokenCaption(data.answer); setShowChat(true);
+      setSearchActivity(previous => [{ id: crypto.randomUUID(), message: `Web search completed: ${query}`, timestamp: new Date().toISOString() }, ...previous].slice(0, 20));
+      if (voiceEnabled || focusRef.current) speak(spokenVersion(data.answer));
+    } catch {
+      if (request.signal.aborted) return;
+      setSpokenCaption(searchMessages.search_unavailable);
+      if (voiceEnabled || focusRef.current) speak(searchMessages.search_unavailable);
+    } finally { if (searchRequest.current === request) { searchRequest.current = null; setSearchPending(false); } }
+  }
   function sendMessage(text: string) {
-    if (text.trim()) clearAction();
+    setSearchResult(null);
+    setWeatherDetails("");
+    cancelSearch("replacement");
+    weatherRequest.current?.abort("replacement"); setWeatherPending(false);
+    if (text.trim()) { clearAction(); setSpokenCaption(""); }
+    if (/^(?:(?:hey\s+)?jarvis[,\s]+)?(?:system status|(?:what(?:'s| is) (?:the |my )?system status)|are (?:all )?systems (?:ready|operational))[?.!]*$/i.test(text.trim())) {
+      pendingSpeech.current = null;
+      const summary = spokenHealth(health.controller.getSnapshot().services);
+      setDraft("");
+      setTranscript(text.trim());
+      setSpokenCaption(summary);
+      if (voiceEnabled || focusRef.current) speak(summary);
+      return;
+    }
     const tvAction = tvShortcuts.supported ? parseTvPowerIntent(text) : null;
     const vampAction = vampShortcut.supported ? parseVampIntent(text) : null;
     if (tvAction || vampAction) {
@@ -618,6 +762,24 @@ export function JarvisChat({ userId }: { userId: string }) {
     meter.current?.stopMicrophone();
     speaker.current?.stop();
     setListening(false);
+    const mapCommand = mapIntent(text);
+    if (mapCommand) {
+      pendingSpeech.current = null; setDraft(""); setTranscript(text.trim());
+      tacticalMap.request(mapCommand);
+      const reply = mapCommand === "stop" ? "Location sharing is off, Sir." : mapCommand === "location" ? "Opening the map, Sir. Tap Show My Location to share while it is open." : "Opening the tactical map, Sir.";
+      setSpokenCaption(reply); if (voiceEnabled || focusRef.current) speak(reply);
+      return;
+    }
+    const weather = weatherIntent(text);
+    if (weather) {
+      pendingSpeech.current = null; setDraft(""); setTranscript(text.trim());
+      void answerWeather(weather); return;
+    }
+    const publicQuery = searchIntent(text);
+    if (publicQuery) {
+      pendingSpeech.current = null; setDraft(""); setTranscript(text.trim());
+      void answerSearch(publicQuery); return;
+    }
     if (isGreetingRequest(text)) {
       setDraft("");
       void playGreeting();
@@ -640,6 +802,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     sendLatest.current = sendMessage;
   });
   function submit() {
+    if (draft.trim()) speaker.current?.primeFromGesture();
     sendMessage(draft);
   }
   const enableAudio = useCallback(async () => {
@@ -704,7 +867,7 @@ export function JarvisChat({ userId }: { userId: string }) {
     setVoiceInteraction(Date.now());
     setVoiceSessionMode(mode);
     setContinuousSession(true);
-    void dictateLatest.current();
+    void dictateLatest.current(true);
   }
   useEffect(() => {
     focusRef.current = focusMode;
@@ -738,13 +901,13 @@ export function JarvisChat({ userId }: { userId: string }) {
       onEndSession={endVoiceSession}
       meter={meter.current}
       caption={
-        speaking
+        searchPending ? "Searching the web..." : speaking
           ? spokenCaption
           : listening
             ? transcript
-            : isLoading
+            : isLoading || weatherPending || searchPending
               ? lastReply || "Working on your request…"
-              : lastReply || ""
+              : searchResult?.answer || lastReply || ""
       }
       userCaption={transcript}
       draft={draft}
@@ -756,7 +919,7 @@ export function JarvisChat({ userId }: { userId: string }) {
       onSend={submit}
       onMic={() => {
         if (listening && sessionActive.current) endVoiceSession();
-        else void dictate();
+        else void dictate(true);
       }}
       onExit={exitFocus}
       onStop={stopResponse}
@@ -781,8 +944,10 @@ export function JarvisChat({ userId }: { userId: string }) {
             "Apple Music request dispatched — playback unverified.",
           );
           const dispatchReply = "Sending the Vamp play request now, Sir.";
-          if (voiceEnabled) speak(dispatchReply);
-          else setSpokenCaption(dispatchReply);
+          if (voiceEnabled) {
+            speaker.current?.primeFromGesture();
+            speak(dispatchReply);
+          } else setSpokenCaption(dispatchReply);
         }}
       />
       <TVShortcutDialog
@@ -792,8 +957,10 @@ export function JarvisChat({ userId }: { userId: string }) {
             "TV power command dispatched — device state unverified.",
           );
           const dispatchReply = "Sending power command to the TV now, Sir.";
-          if (voiceEnabled) speak(dispatchReply);
-          else setSpokenCaption(dispatchReply);
+          if (voiceEnabled) {
+            speaker.current?.primeFromGesture();
+            speak(dispatchReply);
+          } else setSpokenCaption(dispatchReply);
         }}
       />
       <DashboardLayout
@@ -801,13 +968,14 @@ export function JarvisChat({ userId }: { userId: string }) {
         dashboard={
           <JarvisHud
             visualState={visualState}
+            replyCompleted={Boolean(messages.length && messages[messages.length - 1]?.role === "assistant" && messages[messages.length - 1]?.content && !isLoading && !weatherPending && !searchPending)}
             speaking={speaking}
             listening={listening}
-            busy={isLoading}
+            busy={isLoading || weatherPending || searchPending}
             onVoice={() =>
               listening && sessionActive.current
                 ? endVoiceSession()
-                : void dictate()
+                : void dictate(true)
             }
             onFocus={enterFocus}
             onContinuousVoice={() => startVoiceSession("talk", true)}
@@ -825,11 +993,11 @@ export function JarvisChat({ userId }: { userId: string }) {
             meter={meter.current}
             userCaption={transcript}
             assistantCaption={
-              speaking
-                ? spokenCaption
-                : [...messages].reverse().find((m) => m.role === "assistant")
+              spokenCaption || [...messages].reverse().find((m) => m.role === "assistant")
                     ?.content || ""
             }
+            weatherDetails={weatherDetails}
+            searchActivity={searchActivity}
             provider={capabilities?.llmMode === "groq" ? "GROQ" : "DEEPSPACE"}
             showChat={showChat}
             onHome={() => setShowChat(false)}
@@ -924,14 +1092,18 @@ export function JarvisChat({ userId }: { userId: string }) {
                         className="read-aloud"
                         aria-label="Read response aloud"
                         disabled={speaking}
-                        onClick={() => void speak(m.content)}
+                        onClick={() => {
+                          speaker.current?.primeFromGesture();
+                          speak(m.content);
+                        }}
                       >
                         <Volume2 size={15} /> Listen
                       </button>
                     )}
                   </article>
                 ))}
-                {!messages.length && (
+                <WebSearchResults result={searchResult} />
+                {!messages.length && !searchResult && (
                   <div className="hud-chat-empty">
                     <MessageSquare size={28} />
                     <h2>Conversation channel open.</h2>
@@ -951,12 +1123,13 @@ export function JarvisChat({ userId }: { userId: string }) {
                   </p>
                 )}
                 <div className="composer">
+                  <button className="j-home-keyboard" aria-label="Type a message" data-greeting-skip onClick={() => document.querySelector<HTMLTextAreaElement>('[aria-label="Message JARVIS"]')?.focus()}><Keyboard size={24} /></button>
                   <Textarea
                     aria-label="Message JARVIS"
                     placeholder={
                       listening
                         ? "Listening…"
-                        : "Tap to talk or type a command…"
+                        : "Message JARVIS..."
                     }
                     value={draft}
                     maxLength={16000}
@@ -982,12 +1155,12 @@ export function JarvisChat({ userId }: { userId: string }) {
                       onClick={() =>
                         listening && sessionActive.current
                           ? endVoiceSession()
-                          : void dictate()
+                          : void dictate(true)
                       }
                     >
                       <Mic size={21} />
                     </button>
-                    {isLoading ? (
+                    {isLoading || weatherPending || searchPending ? (
                       <button
                         className="send-button"
                         aria-label="Stop response"

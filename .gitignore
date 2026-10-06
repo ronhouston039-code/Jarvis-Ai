@@ -18,3 +18,25 @@ src/modals.tsx
 .env
 .env.*
 !.env.example
+
+# Local credentials and private keys
+.npmrc
+.netrc
+.aws/
+.ssh/
+credentials.json
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Local data and diagnostic artifacts
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.har
+backups/

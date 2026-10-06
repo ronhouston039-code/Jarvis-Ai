@@ -210,6 +210,7 @@ type GlobeScene = {
 function createGlobeScene(
   element: HTMLDivElement,
   onContextLost: () => void,
+  neural = false,
 ): GlobeScene | null {
   const canvas = document.createElement("canvas");
   const allocated: Array<{ dispose: () => void }> = [];
@@ -269,8 +270,8 @@ function createGlobeScene(
       new THREE.MeshBasicMaterial({
         color: 0x001b43,
         transparent: true,
-        opacity: 0.76,
-        depthWrite: true,
+        opacity: neural ? 0.12 : 0.76,
+        depthWrite: !neural,
       }),
     );
     globe.add(new THREE.Mesh(sphereGeometry, sphereMaterial));
@@ -331,12 +332,12 @@ function createGlobeScene(
     scene.add(particles);
     const nodes: number[] = [];
     const positions: THREE.Vector3[] = [];
-    const count = 84;
+    const count = neural ? 220 : 84;
     for (let index = 0; index < count; index++) {
       const y = 1 - (2 * (index + 0.5)) / count;
       const radius = Math.sqrt(1 - y * y);
       const angle = index * 2.39996323;
-      const shell = 1.07 + (index % 5) * 0.031;
+      const shell = neural ? 0.73 + (index % 5) * 0.016 : 1.07 + (index % 5) * 0.031;
       const point = new THREE.Vector3(
         Math.cos(angle) * radius * shell,
         y * shell,
@@ -349,7 +350,7 @@ function createGlobeScene(
     const nodeMaterial = track(
       new THREE.PointsMaterial({
         color: 0xa9f7ff,
-        size: 0.019,
+        size: neural ? 0.026 : 0.019,
         transparent: true,
         opacity: 0.58,
         blending: THREE.AdditiveBlending,
@@ -393,11 +394,11 @@ function createGlobeScene(
     const dotGeometry = track(new THREE.SphereGeometry(0.022, 8, 6));
     const actionGeometry = track(new THREE.SphereGeometry(0.038, 10, 8));
     const rings = [0, 1, 2].map((index) => {
-      const radius = 1.11 + index * 0.075;
+      const radius = neural ? 1.02 + index * 0.16 : 1.11 + index * 0.075;
       const ring = new THREE.Group();
       ring.rotation.set(
-        [0.77, -0.88, 0.28][index],
-        [0.15, -0.35, 0.68][index],
+        neural ? [0.06, -0.08, 0.1][index] : [0.77, -0.88, 0.28][index],
+        neural ? [0.02, -0.04, 0.06][index] : [0.15, -0.35, 0.68][index],
         [0.1, 0.4, -0.6][index],
       );
       const orbit = new THREE.Group();
@@ -519,10 +520,10 @@ function createGlobeScene(
         ringMaterial.opacity = 0.24 + frame.linkOpacity * 0.45;
         ringArcMaterial.color.set(frame.coreColor);
         ringArcMaterial.opacity = 0.45 + frame.nodeOpacity * 0.4;
-        gridMaterial.opacity = 0.2 + frame.linkOpacity * 0.2;
-        landMaterial.opacity = 0.56 + frame.nodeOpacity * 0.35;
+        gridMaterial.opacity = neural ? 0 : 0.2 + frame.linkOpacity * 0.2;
+        landMaterial.opacity = neural ? 0 : 0.56 + frame.nodeOpacity * 0.35;
         nodeMaterial.opacity = frame.nodeOpacity;
-        linkMaterial.opacity = frame.linkOpacity * 0.42;
+        linkMaterial.opacity = frame.linkOpacity * (neural ? 1.8 : 0.42);
         coreMaterial.color.set(frame.coreColor);
         coreMaterial.opacity = frame.coreOpacity;
         core.scale.set(0.48 * frame.coreScale, 0.48 * frame.coreScale, 1);
@@ -556,10 +557,12 @@ export function HolographicGlobe({
   visualState,
   meter,
   onFrame,
+  variant = "earth",
 }: {
   visualState: AssistantVisualState;
   meter: FocusAudioMeter;
   onFrame?: (frame: VisualFrame) => void;
+  variant?: "earth" | "neural";
 }) {
   const host = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -603,7 +606,7 @@ export function HolographicGlobe({
       scene = null;
       if (!disposed) setFallback(true);
     };
-    scene = createGlobeScene(element, toFallback);
+    scene = createGlobeScene(element, toFallback, variant === "neural");
     if (!scene) setFallback(true);
     else setFallback(false);
 
@@ -731,11 +734,11 @@ export function HolographicGlobe({
       scene?.dispose();
       scene = null;
     };
-  }, [meter]);
+  }, [meter, variant]);
 
   return (
     <div
-      className="holographic-globe"
+      className={`holographic-globe ${variant === "neural" ? "neural-plexus neural-core" : ""}`}
       ref={host}
       aria-hidden="true"
       data-state={visualState.phase}
@@ -794,7 +797,7 @@ export function HolographicGlobe({
             strokeLinejoin="round"
             opacity="0.85"
           >
-            {fallbackPaths.map((path, index) => (
+            {(variant === "neural" ? [] : fallbackPaths).map((path, index) => (
               <path key={index} d={path} />
             ))}
           </g>

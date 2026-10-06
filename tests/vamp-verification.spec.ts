@@ -1,3 +1,4 @@
+import { mockHomeMapTiles, openHomeActivity } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
 import {
@@ -30,6 +31,10 @@ type TestMusicWindow = {
 };
 
 async function prepareMusic(page: Page, initial: TestPlayback) {
+  await mockHomeMapTiles(page);
+  await page.route("**/api/health", r => r.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/jarvis/connections/home-assistant/config", r => r.fulfill({ json: { available: false, enabled: false } }));
+  await page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: { location: "Goldsboro", temperature: 70, feelsLike: 68, description: "Clear", retrievedAt: "2026-10-05T12:00:00Z" } }));
   await page.route("**/api/jarvis/connections/apple-music/config", (route) =>
     route.fulfill({
       json: {
@@ -160,7 +165,7 @@ async function awaitPlaybackPoll(page: Page) {
 }
 
 async function dispatchVamp(page: Page) {
-  await page.getByRole("button", { name: "Play Vamp", exact: true }).click();
+  await page.getByRole("button", { name: "Music", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Play Vamp" });
   await expect(dialog).toBeVisible();
   expect(
@@ -211,6 +216,7 @@ test("iPhone Vamp manual report stays separate from current MusicKit verificatio
   });
   await saveVampConnection(user.page);
   await user.page.goto("/home");
+  await openHomeActivity(user.page);
   const card = user.page.getByRole("region", {
     name: "Now Playing",
     exact: true,
@@ -314,6 +320,7 @@ test("iPhone Vamp manual report stays separate from current MusicKit verificatio
 
   await setPlayback(user.page, { playing: false, item: approved });
   await user.page.reload();
+  await openHomeActivity(user.page);
   await expect(provider).toHaveText(
     "MusicKit: Paused — Approved Playlist Track",
   );
@@ -346,6 +353,7 @@ test("iPhone Vamp title or missing playlist context cannot verify and a later ma
   await prepareMusic(user.page, { playing: true, item: titledVamp });
   await saveVampConnection(user.page);
   await user.page.goto("/home");
+  await openHomeActivity(user.page);
   const card = user.page.getByRole("region", {
     name: "Now Playing",
     exact: true,

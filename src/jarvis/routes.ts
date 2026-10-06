@@ -4,7 +4,8 @@ import {
   localManifestSchema,
   localRequestSchema,
 } from "./native-home-audit";
-import { weatherSnapshot, weatherCoordinatesQuery } from "./weather";
+import { registerSearchRoutes } from "./search-routes";
+import { resolveWeather, weatherRequestQuery } from "./weather";
 import { registerConnectionRoutes } from "./connection-routes";
 import { startupAudio } from "./startup-audio";
 import { usesOwnerGroq } from "../ai/groq";
@@ -14,7 +15,13 @@ import { resolveAppMembership, createUserToolExecutor } from "deepspace/worker";
 import { z } from "zod";
 import type { AppContext } from "../../worker";
 import { resolveAuth, resolveAgentAuth } from "../server/http-routes";
-import { memorySchema, reminderSchema, deletionSchema } from "./contracts";
+import {
+  memorySchema,
+  reminderSchema,
+  deletionSchema,
+  preferencesPatchSchema,
+} from "./contracts";
+import { logFishAudioMissingKey, requestFishAudio } from "./fish-audio";
 
 export function registerJarvisRoutes(app: Hono<AppContext>) {
   app.get("/api/health", (c) =>
@@ -99,6 +106,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       onError: (c) => c.json({ error: "request_too_large" }, 413),
     }),
   );
+  registerSearchRoutes(app);
   app.get("/api/weather", async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env);
     if (!auth) return c.json({ error: "unauthorized" }, 401);
@@ -108,7 +116,7 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       c.req.raw.signal,
     );
     if (!membership?.member) return c.json({ error: "forbidden" }, 403);
-    const parsed = weatherCoordinatesQuery.safeParse(c.req.query());
+    const parsed = weatherRequestQuery.safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: "invalid_coordinates" }, 400);
     const stub = c.env.CONFIRMATIONS.get(
       c.env.CONFIRMATIONS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
@@ -127,60 +135,19 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
     if (!quota.ok) return quota;
     try {
       return c.json(
-        await weatherSnapshot(
-          parsed.data.lat,
-          parsed.data.lon,
-          "Current location",
-          c.env.OPENWEATHER_API_KEY,
-        ),
+        await resolveWeather(createUserToolExecutor(c.env, auth.userId, c.req.raw.signal), parsed.data, c.env.OPENWEATHER_API_KEY, c.req.raw.signal),
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && ["city_ambiguous", "city_not_found"].includes(error.message)) return c.json({ error: error.message }, 422);
       return c.json({ error: "weather_unavailable" }, 502);
     }
   });
   app.post("/api/jarvis/preferences", async (c) => {
     const auth = await resolveAuth(c.req.raw, c.env);
     if (!auth) return c.json({ error: "unauthorized" }, 401);
-    const parsed = z
-      .object({
-        timezone: z
-          .string()
-          .max(100)
-          .refine((value) => {
-            try {
-              new Intl.DateTimeFormat("en", { timeZone: value });
-              return true;
-            } catch {
-              return false;
-            }
-          }),
-        responseMode: z.enum(["normal", "brief", "technical"]),
-        proactive: z
-          .string()
-          .max(1000)
-          .refine((value) => {
-            try {
-              return z
-                .object({
-                  dailyBriefing: z.boolean(),
-                  calendarAlerts: z.boolean(),
-                  weatherAlerts: z.boolean(),
-                  focusBlocks: z.enum(["ask", "off"]),
-                  emailReminders: z.boolean(),
-                  marketing: z.boolean(),
-                  quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-                  quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-                })
-                .strict()
-                .safeParse(JSON.parse(value)).success;
-            } catch {
-              return false;
-            }
-          })
-          .optional(),
-      })
-      .strict()
-      .safeParse(await c.req.json().catch(() => null));
+    const parsed = preferencesPatchSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
     if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
     const execute = createUserToolExecutor(
       c.env,
@@ -436,43 +403,32 @@ export function registerJarvisRoutes(app: Hono<AppContext>) {
       if (!auth) return c.json({ error: "unauthorized" }, 401);
       if (auth.userId !== c.env.OWNER_USER_ID)
         return c.json({ error: "owner_voice_only" }, 403);
-      if (!c.env.FISH_AUDIO_API_KEY)
-        return c.json({ error: "fish_voice_not_connected" }, 409);
+      if (!c.env.FISH_AUDIO_API_KEY) {
+        logFishAudioMissingKey();
+        return c.json({ error: "fish_voice_not_connected" }, 409, {
+          "Cache-Control": "no-store",
+        });
+      }
       const parsed = z
         .object({ text: z.string().trim().min(1).max(1000) })
         .strict()
         .safeParse(await c.req.json().catch(() => null));
       if (!parsed.success) return c.json({ error: "invalid_fields" }, 422);
-      try {
-        const response = await fetch("https://api.fish.audio/v1/tts", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${c.env.FISH_AUDIO_API_KEY}`,
-            "Content-Type": "application/json",
-            model: "s1",
-            "User-Agent": "JARVIS/1.0",
-          },
-          body: JSON.stringify({
-            text: parsed.data.text,
-            reference_id: "612b878b113047d9a770c069c8b4fdfe",
-            format: "mp3",
-          }),
-          signal: AbortSignal.timeout(30000),
+      const result = await requestFishAudio(
+        parsed.data.text,
+        c.env.FISH_AUDIO_API_KEY,
+        c.req.raw.signal,
+      );
+      if (!result.ok)
+        return c.json(result.failure, result.status, {
+          "Cache-Control": "no-store",
         });
-        if (response.status === 402)
-          return c.json({ error: "speech_credits_required" }, 402);
-        if (response.status === 401 || response.status === 403)
-          return c.json({ error: "speech_access_denied" }, 502);
-        if (!response.ok) return c.json({ error: "speech_unavailable" }, 502);
-        return new Response(response.body, {
-          headers: {
-            "Content-Type": "audio/mpeg",
-            "Cache-Control": "no-store",
-          },
-        });
-      } catch {
-        return c.json({ error: "speech_unavailable" }, 502);
-      }
+      return new Response(result.response.body, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": "no-store",
+        },
+      });
     });
   registerConnectionRoutes(app);
 }

@@ -88,6 +88,7 @@ export class AppJobRoom extends JobRoom<Env> {
 }
 
 export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
+  TAVILY_API_KEY?: string;
   OPENWEATHER_API_KEY?: string;
   APPLE_MUSIC_DEVELOPER_TOKEN?: string;
   LLM_MODE?: string;

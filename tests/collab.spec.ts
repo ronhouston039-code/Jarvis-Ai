@@ -1,3 +1,4 @@
+import { openHomeMenu, openHomeActivity, mockHomeMapTiles } from "./helpers/home-controls";
 /**
  * Multi-user collaboration spec — verifies two users sign in into
  * separate browser contexts and the app distinguishes them.
@@ -181,108 +182,59 @@ test("private memory isolates users and deletion requires an action-bound confir
   await expect(a.page.getByText(content, { exact: true })).toHaveCount(0);
 });
 
-test("iPhone keeps the full desktop dashboard with horizontal panning", async ({
-  users,
-}) => {
+test("iPhone Home reflows vertically with a pinned command bar and no horizontal panning", async ({ users }) => {
   const [a] = await users(1);
+  await mockHomeMapTiles(a.page);
   await a.page.setViewportSize({ width: 390, height: 844 });
   await a.page.goto("/home");
-  await expect(
-    a.page.getByRole("textbox", { name: "Message JARVIS" }),
-  ).toBeVisible();
-  await expect(
-    a.page.getByRole("button", { name: "Start voice input" }),
-  ).toBeVisible();
-  expect(
-    await a.page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await expect(
-    a.page.getByRole("button", { name: "Zoom dashboard", exact: true }),
-  ).toBeVisible();
-  await a.page.screenshot({
-    path: "test-results/jarvis-mobile-overview.png",
-    fullPage: true,
-  });
-  await a.page
-    .getByRole("button", { name: "Zoom dashboard", exact: true })
-    .click();
+  await expect(a.page.getByRole("textbox", { name: "Message JARVIS" })).toBeVisible();
+  await expect(a.page.getByRole("button", { name: "Start voice input" })).toBeVisible();
+  expect(await a.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(a.page.locator(".j-home-map canvas.maplibregl-canvas")).toBeVisible();
   const layout = await a.page.evaluate(() => {
-    const viewport = document.querySelector(".hud-viewport");
-    const dashboard = document.querySelector(".hud-dashboard");
-    const support = document.querySelector(".hud-support");
-    return {
-      width: dashboard.getBoundingClientRect().width,
-      scrollable: viewport.scrollWidth > viewport.clientWidth,
-      supportVisible: getComputedStyle(support).display !== "none",
-    };
+    const core = document.querySelector(".j-home-core")!.getBoundingClientRect();
+    const map = document.querySelector(".j-home-map")!.getBoundingClientRect();
+    const mic = document.querySelector(".mic-button")!.getBoundingClientRect();
+    return { width: document.querySelector(".jarvis-home")!.getBoundingClientRect().width, mapBelow: map.top >= core.bottom, micBottom: mic.bottom };
   });
-  expect(layout.width).toBeGreaterThanOrEqual(1280);
-  expect(layout.scrollable).toBe(true);
-  expect(layout.supportVisible).toBe(true);
-  await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
+  expect(layout.width).toBeLessThanOrEqual(390);
+  expect(layout.mapBelow).toBe(true);
+  expect(layout.micBottom).toBeLessThanOrEqual(844);
+  await expect(a.page.locator(".j-home-command")).toHaveCSS("position", "fixed");
+  await expect(a.page.getByRole("button", { name: "Zoom dashboard", exact: true })).toHaveCount(0);
+  await openHomeMenu(a.page); await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await expect(a.page.getByText("Conversation channel open.")).toBeVisible();
-  await a.page.getByRole("button", { name: "HOME", exact: true }).click();
-
-  await a.page.screenshot({
-    path: "test-results/jarvis-mobile.png",
-    fullPage: true,
-  });
+  await openHomeMenu(a.page); await a.page.getByRole("button", { name: "HOME", exact: true }).click();
+  await expect(a.page.getByRole("region", { name: "Conversation", exact: true })).toHaveCount(0);
 });
 
-test("holographic dashboard shows honest connection states and working navigation", async ({
-  users,
-}) => {
+test("holographic dashboard shows honest connection states and working navigation", async ({ users }) => {
   const [a] = await users(1);
-  await a.page.setViewportSize({ width: 1280, height: 720 });
+  await mockHomeMapTiles(a.page);
+  await a.page.route("**/api/jarvis/connections/weather", r => r.fulfill({ status: 503, json: { error: "unavailable" } }));
+  await a.page.setViewportSize({ width: 1280, height: 900 });
   await a.page.goto("/home");
   await expect(a.page.locator(".hud-brand h1")).toHaveText("JARVIS");
   await expect(a.page.locator(".neural-plexus canvas")).toBeVisible();
-  const inputSpacing = await a.page.evaluate(() => {
-    const input = document.querySelector<HTMLTextAreaElement>(
-      ".hud-bottom textarea",
-    )!;
-    const mic = document
-      .querySelector(".hud-bottom .mic-button")!
-      .getBoundingClientRect();
-    const contentStart =
-      input.getBoundingClientRect().left +
-      parseFloat(getComputedStyle(input).paddingLeft);
-    return {
-      contentStart,
-      micRight: mic.right,
-      micBottom: mic.bottom,
-      viewportHeight: window.innerHeight,
-    };
+  const spacing = await a.page.locator(".composer").evaluate(e => {
+    const input = e.querySelector("textarea")!.getBoundingClientRect();
+    const mic = e.querySelector(".mic-button")!.getBoundingClientRect();
+    return { gap: mic.left - input.right, bottom: mic.bottom };
   });
-  expect(inputSpacing.contentStart).toBeGreaterThan(inputSpacing.micRight);
-  expect(inputSpacing.micBottom).toBeLessThanOrEqual(
-    inputSpacing.viewportHeight,
-  );
-  await expect(a.page.locator(".hud-weather")).toContainText(
-    "Tap to set location",
-  );
-  await expect(
-    a.page.getByRole("link", { name: "SMART HOME", exact: true }),
-  ).toHaveAttribute("href", "/connections?tab=home");
-  await expect(a.page.getByText("GAMES", { exact: true })).toHaveCount(0);
-  await expect(a.page.getByText("INTERNET", { exact: true })).toHaveCount(0);
-  await expect(a.page.locator(".location-panel")).toContainText(
-    "Location access is not enabled",
-  );
-  await a.page.screenshot({
-    path: "test-results/jarvis-desktop.png",
-    fullPage: true,
-  });
-  await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
+  expect(spacing.gap).toBeGreaterThanOrEqual(0);
+  expect(spacing.bottom).toBeLessThanOrEqual(900);
+  await expect(a.page.locator(".hud-weather")).toContainText("Service could not be reached.");
+  await expect(a.page.locator(".j-home-map canvas.maplibregl-canvas")).toBeVisible();
+  await expect(a.page.locator(".j-home-actions > *")).toHaveCount(7);
+  await expect(a.page.getByRole("link", { name: "SMART HOME", exact: true })).toHaveCount(0);
+  for (const label of ["GAMES", "INTERNET", "Alexa", "Gmail"]) await expect(a.page.getByText(label, { exact: true })).toHaveCount(0);
+  await expect(a.page.getByRole("link", { name: "Security", exact: true })).toHaveAttribute("href", "/settings#settings-privacy");
+  await openHomeMenu(a.page); await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await expect(a.page.getByText("Conversation channel open.")).toBeVisible();
-  await a.page.getByRole("button", { name: "HOME", exact: true }).click();
+  await openHomeMenu(a.page); await a.page.getByRole("button", { name: "HOME", exact: true }).click();
   await expect(a.page.locator(".neural-plexus canvas")).toBeVisible();
-  await a.page.getByRole("link", { name: "PRODUCTIVITY", exact: true }).click();
-  await expect(
-    a.page.getByRole("heading", { name: "My space", exact: true }),
-  ).toBeVisible();
+  await openHomeMenu(a.page); await a.page.getByRole("link", { name: "PRODUCTIVITY", exact: true }).click();
+  await expect(a.page.getByRole("heading", { name: "My space", exact: true })).toBeVisible();
 });
 
 test("streamed chat executes registered time tool and persists across reload", async ({
@@ -313,7 +265,9 @@ test("streamed chat executes registered time tool and persists across reload", a
     }),
   ).toHaveCount(0);
   await a.page.reload();
+  await openHomeMenu(a.page);
   await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
+  await openHomeActivity(a.page);
   await a.page.locator(".history-item").first().click();
   await expect(
     a.page
@@ -491,10 +445,10 @@ test("location and shortcut connections persist privately and reject cross-user 
     a.page
       .locator(".personal-card")
       .filter({ hasText: device })
-      .getByRole("link", { name: "Turn on", exact: true }),
+      .getByRole("button", { name: "Turn on", exact: true }),
   ).toHaveAttribute(
-    "href",
-    "shortcuts://run-shortcut?name=TV%20On%20%26%20verify",
+    "data-shortcut-name",
+    "TV On & verify",
   );
   await b.page.goto("/connections?tab=home");
   await expect(b.page.getByText(device, { exact: true })).toHaveCount(0);
@@ -628,7 +582,16 @@ test("voice activation speaks acknowledgement and each completed reply once", as
     window.speechSynthesis.speak = (utterance) => {
       const w = window as unknown as { __spoken: string[] };
       w.__spoken ??= [];
+      if (utterance.volume === 0 || !utterance.text.trim()) return;
       w.__spoken.push(utterance.text);
+      setTimeout(
+        () => utterance.onstart?.(new Event("start") as SpeechSynthesisEvent),
+        0,
+      );
+      setTimeout(
+        () => utterance.onend?.(new Event("end") as SpeechSynthesisEvent),
+        25,
+      );
     };
   });
   await a.page.goto("/home");
@@ -638,6 +601,13 @@ test("voice activation speaks acknowledgement and each completed reply once", as
   await expect(
     a.page.getByRole("button", { name: "Voice on · turn off", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      a.page.evaluate(
+        () => (window as unknown as { __spoken: string[] }).__spoken,
+      ),
+    )
+    .toEqual([expect.stringContaining("Voice enabled")]);
   await a.page
     .getByRole("textbox", { name: "Message JARVIS" })
     .fill("Please get the current UTC time.");
@@ -657,7 +627,9 @@ test("voice activation speaks acknowledgement and each completed reply once", as
   await a.page
     .getByRole("button", { name: "Voice on · turn off", exact: true })
     .click();
+  await openHomeMenu(a.page);
   await a.page.getByRole("button", { name: "HOME", exact: true }).click();
+  await openHomeMenu(a.page);
   await a.page.getByRole("button", { name: "CHAT", exact: true }).click();
   expect(
     await a.page.evaluate(
@@ -722,6 +694,7 @@ test("Fish MP3 playback animates the orb and microphone cancels speech", async (
   await expect(
     a.page.getByText("Jarvis is speaking…", { exact: true }),
   ).toBeVisible();
+  await openHomeMenu(a.page);
   await a.page.getByRole("button", { name: "HOME", exact: true }).click();
   await expect(a.page.locator(".neural-plexus canvas")).toHaveAttribute(
     "data-state",
@@ -1080,6 +1053,11 @@ test("weather permissions are explicit and approximate GPS is not saved automati
       savedLocations++;
   });
   await a.page.goto("/connections?tab=location");
+  // Dedicated test accounts can retain an earlier suite's saved city.
+  // Restore this test's no-saved-location precondition before permission checks.
+  const removeSaved = a.page.getByRole("button", { name: "Disconnect weather", exact: true });
+  await expect(a.page.getByRole("button", { name: /^(Set weather location|Disconnect weather)$/ }).first()).toBeEnabled();
+  if (await removeSaved.isVisible()) await removeSaved.click();
   await a.page
     .getByRole("button", { name: "Set weather location", exact: true })
     .click();

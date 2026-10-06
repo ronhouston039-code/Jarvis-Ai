@@ -1,11 +1,13 @@
+import { openHomeMenu, mockHomeMapTiles } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
 
-test("desktop shell pins the command bar and scrolls panels internally on short screens", async ({
+test("desktop shell pins the command bar and scrolls Home content internally on short screens", async ({
   users,
 }) => {
   const [user] = await users(1);
+  await mockHomeMapTiles(user.page);
   await user.page.goto("/home");
   await expect(user.page.locator(".jarvis-desktop-shell")).toBeVisible();
   for (const height of [600, 720, 900]) {
@@ -25,7 +27,7 @@ test("desktop shell pins the command bar and scrolls panels internally on short 
         .querySelector(".jarvis-desktop-shell")!
         .getBoundingClientRect();
       const right = document.querySelector<HTMLElement>(
-        ".jarvis-sidebar-right",
+        ".j-home-content",
       )!;
       right.scrollTop = right.scrollHeight;
       return {
@@ -48,6 +50,7 @@ test("command center rotates its globe and releases it when entering Focus", asy
 }, testInfo) => {
   const [user] = await users(1);
   await user.page.setViewportSize({ width: 1280, height: 720 });
+  await mockHomeMapTiles(user.page);
   await user.page.goto("/home");
   const globe = user.page.locator(
     '.holographic-globe canvas[data-renderer="webgl"]',
@@ -62,6 +65,7 @@ test("command center rotates its globe and releases it when entering Focus", asy
   await user.page.screenshot({
     path: testInfo.outputPath("command-center.png"),
   });
+  await openHomeMenu(user.page);
   await user.page
     .getByRole("button", { name: "Full Screen Focus", exact: true })
     .click();
@@ -76,6 +80,7 @@ test("command center globe handles context loss and unsupported WebGL", async ({
   users,
 }) => {
   const [user] = await users(1);
+  await mockHomeMapTiles(user.page);
   await user.page.goto("/home");
   const globe = user.page.locator(
     '.holographic-globe canvas[data-renderer="webgl"]',
@@ -88,8 +93,9 @@ test("command center globe handles context loss and unsupported WebGL", async ({
     user.page.locator('.holographic-globe svg[data-renderer="svg"]'),
   ).toBeVisible();
   await expect(globe).toHaveCount(0);
-  // The main reactor remains independent of the globe's graphics lifecycle.
-  await expect(user.page.locator(".neural-plexus canvas")).toHaveCount(1);
+  // The unified core releases its only canvas and keeps a state-driven SVG.
+  await expect(user.page.locator(".neural-plexus canvas")).toHaveCount(0);
+  await expect(user.page.locator(".neural-core svg[data-active=true]")).toHaveCount(1);
   await user.page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (

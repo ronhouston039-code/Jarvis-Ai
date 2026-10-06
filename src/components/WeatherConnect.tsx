@@ -1,5 +1,6 @@
+import { useSystemHealth } from "./SystemHealthProvider";
 import { useEffect, useState } from "react";
-import { useAuthProfileReady, useQuery } from "deepspace";
+import { useQuery } from "deepspace";
 import { Link } from "react-router-dom";
 import { authenticatedFetch } from "../jarvis/client";
 import type { WeatherSnapshot } from "../jarvis/weather";
@@ -26,7 +27,8 @@ export function requestLocation(): Promise<{
   });
 }
 export function WeatherConnect({ compact = false }: { compact?: boolean }) {
-  const { records } = useQuery<{
+  const { weather: sharedWeather } = useSystemHealth();
+  const { records, status: locationStatus } = useQuery<{
     label: string;
     latitude: number;
     longitude: number;
@@ -34,7 +36,7 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
     where: { enabled: 1 },
     limit: 1,
   });
-  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const [weatherOverride, setWeather] = useState<WeatherSnapshot | null>(null);
   const [prompt, setPrompt] = useState(false);
   const [cityMode, setCityMode] = useState(false);
   const [city, setCity] = useState(
@@ -50,30 +52,14 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
   const locationLabel = records[0]?.data.label;
   const latitude = records[0]?.data.latitude;
   const longitude = records[0]?.data.longitude;
+  const weather = weatherOverride ?? (!dismissed ? sharedWeather : null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (!locationId) {
-      setWeather(null);
-      return;
-    }
-    let active = true;
-    void authenticatedFetch("/api/jarvis/connections/weather")
-      .then(async (r) => {
-        if (r.ok) {
-          const data = (await r.json()) as WeatherSnapshot;
-          if (active) setWeather(data);
-        } else if (active) setStatus("Live weather could not be retrieved.");
-      })
-      .catch(() => {
-        if (active) setStatus("Live weather could not be retrieved.");
-      });
-    return () => {
-      active = false;
-    };
+    setWeather(null);
   }, [locationId, locationLabel, latitude, longitude]);
   async function loadCurrent() {
     setBusy(true);
@@ -152,7 +138,7 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
       setWeather(null);
       setPrompt(false);
       setDismissed(true);
-      setStatus("Weather location disconnected.");
+      setStatus("Saved location removed. Goldsboro remains the default forecast.");
     } catch {
       setStatus("Could not disconnect location. Try again.");
     } finally {
@@ -171,10 +157,10 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
         {weather ? (
           <>
             <h3>
-              {weather.location} · {weather.temperature}°F
+              {weather.location} · {weather.temperature}{weather.unit === "celsius" ? "°C" : "°F"}
             </h3>
             <p>
-              {weather.description} · Feels like {weather.feelsLike}°F
+              {weather.description} · Feels like {weather.feelsLike}{weather.unit === "celsius" ? "°C" : "°F"}
             </p>
             {weather.high !== null && weather.low !== null && (
               <p>
@@ -190,7 +176,7 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
                   {updated < 1 ? "Just now" : `${updated} minutes ago`}.
                 </p>
                 <p className="muted text-sm">{weather.source}</p>
-                {weather.forecast.map((day) => (
+                {(Array.isArray(weather.forecast) ? weather.forecast : []).map((day) => (
                   <p key={day.date}>
                     {day.date}: High {day.high}° · Low {day.low}° · Rain{" "}
                     {day.rainChance}%
@@ -204,23 +190,23 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
             {compact
               ? "Tap to set weather location"
               : dismissed
-                ? "Weather disconnected."
-                : "To show local weather, I need your approximate location."}
+                ? "Saved location removed. Goldsboro is the default."
+                : "Weather data is unavailable or still loading."}
           </p>
         )}
         <div className="connection-actions">
           <Button
             variant="outline"
-            disabled={busy}
+            disabled={busy || locationStatus !== "ready"}
             onClick={() => {
               setPrompt(true);
               setCityMode(false);
               setDismissed(false);
             }}
           >
-            {weather ? "Change location" : "Set weather location"}
+            {locationId ? "Change location" : "Set weather location"}
           </Button>
-          {weather && (
+          {locationId && (
             <Button
               variant="outline"
               disabled={busy}
@@ -309,65 +295,14 @@ export function WeatherConnect({ compact = false }: { compact?: boolean }) {
 }
 
 export function WeatherSummary() {
-  const { userId, isSignedIn, isReady } = useAuthProfileReady({
-    requireUser: true,
-  });
-  const { records } = useQuery<{
-    label: string;
-    latitude: number;
-    longitude: number;
-  }>("locations", { where: { enabled: 1 }, limit: 1 });
-  const location = records[0]?.data;
-  const hasLocation = Boolean(location);
-  const locationKey = `${userId}:${location?.label}:${location?.latitude}:${location?.longitude}`;
-  const [snapshot, setSnapshot] = useState<{
-    key: string;
-    weather: WeatherSnapshot;
-  } | null>(null);
-  const weather =
-    isSignedIn && snapshot?.key === locationKey ? snapshot.weather : null;
-  useEffect(() => {
-    setSnapshot(null);
-    if (!hasLocation || !isReady || !isSignedIn) return;
-    let active = true;
-    let request: AbortController | null = null;
-    const refresh = async () => {
-      request?.abort();
-      const controller = new AbortController();
-      request = controller;
-      try {
-        const response = await authenticatedFetch(
-          "/api/jarvis/connections/weather",
-          undefined,
-          controller.signal,
-        );
-        if (!response.ok) throw new Error("weather_unavailable");
-        const data = (await response.json()) as WeatherSnapshot;
-        if (active && !controller.signal.aborted)
-          setSnapshot({ key: locationKey, weather: data });
-      } catch {
-        if (active && !controller.signal.aborted) setSnapshot(null);
-      }
-    };
-    const foreground = () => {
-      if (!document.hidden) void refresh();
-    };
-    void refresh();
-    const timer = window.setInterval(foreground, 5 * 60 * 1000);
-    document.addEventListener("visibilitychange", foreground);
-    return () => {
-      active = false;
-      request?.abort();
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", foreground);
-    };
-  }, [locationKey, hasLocation, isReady, isSignedIn]);
+  const { weather, services } = useSystemHealth();
+  const hasLocation = services.find(s => s.id === "weather")?.enabled;
   return (
     <div>
       {weather ? (
         <>
           <strong>
-            {weather.location.split(",")[0]} · {weather.temperature}°F
+            {weather.location.split(",")[0]} · {weather.temperature}{weather.unit === "celsius" ? "°C" : "°F"}
           </strong>
           <span>
             {weather.description} · Feels {weather.feelsLike}°
@@ -379,7 +314,7 @@ export function WeatherSummary() {
       ) : (
         <>
           <strong>WEATHER</strong>
-          <span>{location ? "Check live weather" : "Tap to set location"}</span>
+          <span>{hasLocation ? "Check live weather" : "Tap to set location"}</span>
         </>
       )}
     </div>

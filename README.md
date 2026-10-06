@@ -100,7 +100,7 @@ to the selected LLM, so use a general area when precise coordinates are unnecess
 Apple Home is not a web API. In iPhone Shortcuts, create **Control My Home**
 actions for your TV, lights, plugs or fans and register the exact On/Off shortcut
 names in **Smart home**. If a TV cannot change power through Apple Home, use its
-manufacturer's supported Shortcut actions. Tapping On/Off opens the corresponding
+manufacturer's supported Shortcut actions. Tapping On/Off opens a review sheet; only confirmation opens the corresponding
 `shortcuts://run-shortcut?name=...` URL. The iPhone controls authorization and
 execution; JARVIS does not claim success or read device status. Removing a
 connection clears its registered names. Locks and alarm controls are unsupported.
@@ -109,9 +109,10 @@ For **Apple Music**, make Play Music and optionally Pause Music shortcuts and
 register their names. This uses the iPhone's Apple Music subscription and app;
 it does not grant JARVIS direct library access. No Apple credentials are collected.
 
-Listen uses device speech by default and makes no Fish API request. The uploaded
-startup greeting remains available separately. Device speech may use the browser
-or OS speech service; it is not a guarantee of offline synthesis.
+Listen requests server-side Fish Audio and falls back to device speech when
+Fish Audio or audio playback is unavailable. The uploaded startup greeting
+remains available separately. Device speech may use the browser or OS speech
+service; it is not a guarantee of offline synthesis.
 
 **Live information** offers Open-Meteo weather, BBC RSS headlines and live
 Wikipedia searches with source links/timestamps. It is not a general web search.
@@ -208,7 +209,7 @@ Example allow-list format (entity values must match your own configured Home Ass
 ]
 ```
 
-Home Assistant runs at home and pairs/bridges supported accessories locally. Jarvis talks only to its authenticated public HTTPS API, never private IPs, HomeKit or device ports. Redirects, URL credentials, arbitrary URLs/services/entities and local domains/IPs are rejected. The owner-only Connections → Home card shows normalized selected devices, real state/time, Test connection, Disconnect/Reconnect, capabilities and exact expiring confirmations. Sensitive categories, unlock/open/disarm, all scenes, and media power off require a consumed, configuration-bound server token. Camera controls and purchases/account changes are unsupported; privacy/security switches require confirmation. HTTP acceptance is not proof of physical completion; no blind write retries occur.
+Home Assistant runs at home and pairs/bridges supported accessories locally. Jarvis talks only to its authenticated public HTTPS API, never private IPs, HomeKit or device ports. Redirects, URL credentials, arbitrary URLs/services/entities and local domains/IPs are rejected. The owner-only Connections → Home card shows normalized selected devices, real state/time, Test connection, Disconnect/Reconnect, capabilities and exact expiring confirmations. Every device-changing action requires review and a consumed, configuration-bound server token; status reads remain read-only. Sensitive categories, unlock/open/disarm, scenes, and media power off retain the same exact-action protection. Camera controls and purchases/account changes are unsupported; privacy/security switches require confirmation. HTTP acceptance is not proof of physical completion; no blind write retries occur.
 
 Owner-scoped generic tools automatically expose approved capabilities through `list_home_devices`, `get_home_device_status`, `control_home_device`. Secrets and raw provider errors/entity IDs/private addresses never appear in normal UI. Home Assistant integration and native Apple Home are separate providers.
 
@@ -331,3 +332,164 @@ JARVIS_DEV_PROXY=1 JARVIS_TEST_AI=1 npx deepspace test run e2e --grep 'Vamp|live
 The browser music fixtures save a real, owned Connections record with display name **Play Vamp** and a different play shortcut name, check the existing Play link, then exercise text/voice review, synchronous handoff, cancellation, manual outcomes and independent MusicKit evidence. External playback/provider boundaries are mocked; no paid APIs or native iPhone actions run in these automated tests.
 
 Remaining iPhone-only checks: on the live Safari dashboard, type/say “Play Vamp,” verify the sheet names your existing saved shortcut, approve and observe the actual Apple Music app. Cancel must open nothing; returning to JARVIS and reporting Playing/Not Playing must stay labeled user-reported. Repeat Talk/Focus sessions and test microphone interruption, browser/device voice, Reduce Motion and background/foreground behavior on the actual phone. Browser MusicKit verification applies only to its own authorized playback, not native Shortcut playback.
+
+### Phase 1: iPhone Safari voice output
+
+Direct Send, Talk Mode, Wake Jarvis, microphone, voice activation and voice-test
+gestures resume the existing audio context and prepare native speech before
+asynchronous work. The preparation is a muted utterance, not an audible greeting
+or a success signal. Device speech cancels the previous queue, waits for voices
+(including `voiceschanged`), retains a fresh `en-US` utterance with an available
+voice, and reports speaking only after `onstart`. `onend` reports completion;
+errors and a four-second no-start timeout report failure. Rapid interruption
+invalidates callbacks and voice-loading work from the previous turn.
+
+Settings → **Test Device Voice** says **“Device voice is working.”** directly
+from the tap flow and reports actual Started, Completed, Blocked or Browser
+error events. Waiting is not success. A failure shows **“Device voice could not
+start. Tap Test Device Voice and check your audio output.”** Check the phone's
+volume and selected speaker/Bluetooth output when testing. Hiding the page or
+leaving Safari cancels pending and active speech. Returning does not replay it;
+tap a voice control again to unlock a new turn.
+
+Fish Audio remains behind the authenticated, owner-only, rate-limited
+`POST /api/tts` endpoint. The existing server secret is **FISH_AUDIO_API_KEY**;
+it is never returned to the browser. A failed request preserves **“Fish Audio
+unavailable — using device voice.”** even if the device also fails. Settings
+shows a separate sanitized provider diagnostic when an upstream status exists:
+
+| Fish status | Category | Recommended fix |
+| --- | --- | --- |
+| 401 | Missing or invalid key | Replace the server secret with a valid API key and redeploy. |
+| 402 | Credits or plan issue | Fund Fish API billing; subscription credits are separate. |
+| 403 | Permission issue | Check account/API and reference permissions. |
+| 404 | Voice/model unavailable | Verify the configured reference is accessible to the account. |
+| 429 | Rate/concurrency limit | Wait, then make a single new request. |
+| Timeout or 5xx/network | Temporary provider failure | Check provider/network availability and retry manually. |
+
+Missing local configuration is distinguished from an actual upstream 401. Logs
+contain only fixed categories, actual upstream HTTP status when received,
+duration, model/reference identifiers, and whether fallback is required. They
+exclude speech text, headers, credentials, provider bodies and thrown messages.
+Intentional Stop/navigation cancellation does not produce a provider-outage log.
+Receiving a response is not proof that playback started. Automated tests mock
+these boundaries and do not prove the account's current Fish API balance or
+physical iPhone audio output.
+
+Exact phase 1 files:
+
+```text
+README.md
+src/components/FishVoiceSettings.tsx
+src/components/JarvisChat.tsx
+src/components/device-speech.ts
+src/components/device-speech.test.ts
+src/components/jarvis-speech.ts
+src/components/jarvis-speech.test.ts
+src/jarvis/fish-audio.ts
+src/jarvis/fish-audio.test.ts
+src/jarvis/routes.ts
+tests/collab.spec.ts
+tests/device-voice.spec.ts
+```
+
+Focused verification:
+
+```sh
+npm run test:unit -- src/components/device-speech.test.ts src/components/jarvis-speech.test.ts src/components/focus-audio.test.ts src/components/visualizer/visual-state.test.ts src/jarvis/fish-audio.test.ts
+npm run type-check
+npm run lint
+npm run build
+JARVIS_DEV_PROXY=1 JARVIS_TEST_AI=1 npx deepspace test run e2e --grep 'device voice|voice activation|speech|continuous voice|wake|Focus|live globe|Vamp|TV' --json
+```
+
+The existing voice-activation fixture counts only audible utterances, emits
+speech start/end events, and waits for the acknowledgement before sending the
+next command. Muted audio preparation is not a completed spoken reply.
+
+Physical iPhone checks still required: tap Test Device Voice and hear the full
+phrase; verify Started then Completed, volume/Bluetooth routing, voice loading
+after a fresh Safari launch, and a live Fish voice request with real playback.
+Start Talk Mode/Wake Jarvis/microphone and send a message; interrupt speech and
+repeat several sessions without queued replies. Background Safari or lock the
+phone during pending/active speech, return with no replay, then tap to start a
+new turn. Check the saved greeting and reviewed TV/Play Vamp handoff still work
+when iOS switches apps. These hardware checks cannot be established by mocks.
+
+### Phase 5 — Tavily public web research (local implementation)
+
+`POST /api/jarvis/search` accepts `{ "query": "Who invented the telephone?" }`
+using the existing JARVIS bearer authentication and app membership. It returns
+`label`, a provider answer (or explicitly labelled source excerpt), 2–4 actual
+public `sources` with title/domain/URL and publication date when supplied, and
+`retrievedAt`. Source material is untrusted data, rendered as text; it never
+executes commands or changes assistant instructions. Review sources when facts
+are uncertain or disputed. No citations or dates are synthesized.
+
+The server calls only `https://api.tavily.com/search`. Configure the production
+secret **TAVILY_API_KEY** through DeepSpace secret management when deployment
+is approved. `.env.example` contains its blank name only. Do not put keys in
+browser code, query strings, MCP URLs, or source control. Existing credentials
+and live service settings were not changed for this phase.
+
+Settings → Privacy & Security contains the persisted **Live web search** toggle,
+using the existing account-private preferences record. It appears enabled only
+when server configuration is available and the saved preference permits search.
+Configuration availability is not proof of provider authorization or uptime.
+`GET /api/jarvis/search/config` returns only `{ "configured": boolean }` to an
+authenticated app member. The search endpoint enforces the saved setting itself.
+Missing key: “Live web search is not connected yet.” Disabled: “Live web search
+is turned off.” Provider failure, rate limit or timeout: “Live web search is
+temporarily unavailable.” Raw provider diagnostics and credentials are not
+returned or logged.
+
+Public factual/historical/current questions and explicit research requests in
+text or voice use the same route. Casual chat, weather, settings, private-account
+and device commands retain existing handlers. There is no private mailbox,
+purchase, account or device execution in this search path. Existing Wikipedia
+and BBC tools remain available on their original paths; they are not presented
+as Tavily research.
+
+Each actual successful search adds one “Web search completed: [query]” entry to
+the existing Home activity feed. These new entries are bounded to the current
+mounted chat session; no persistent search-history store or raw result retention
+was added. Search replies, like existing local commands, are not persisted in
+LLM conversation history. Compound agent requests retain the existing agent
+path. No guarantee is made that every natural-language phrase routes to search.
+
+Limits: 300-character queries, five requested results, four rendered safe source
+links, ten search requests per user per minute, ten-second provider timeout,
+no blind retries, no credential-bearing/local-network citations. Stop,
+replacement, microphone interruption, pagehide, hidden tab and component cleanup
+abort in-flight requests. Cancellation never generates an outage/success entry.
+
+Focused validation:
+
+```sh
+npm run test:unit -- src/jarvis/search.test.ts src/jarvis/search-routes.test.ts src/components/search-intent.test.ts src/jarvis/contracts.test.ts
+npm run type-check
+npm run lint
+npm run build
+JARVIS_DEV_PROXY=1 JARVIS_TEST_AI=1 npx deepspace test run e2e --grep 'Phase 5|Settings redesign|device voice|wake mode requires|continuous voice starts|iPhone TV actions require|iPhone Vamp quick action' --json
+```
+
+Automated tests mock Tavily. A valid deployed account/key, real live-source
+retrieval, spoken iPhone responses and Safari background/return behavior must
+still be checked after explicit deployment approval. No publication is implied
+by local validation.
+
+### Phase 7 local device validation
+
+Connections Play for the saved **Play Vamp** music connection now reuses the
+existing Play Vamp review/controller and its account-scoped dispatch history.
+Other saved Shortcut controls review the exact device, action, and configured
+Shortcut name before synchronous handoff. Cancel sends nothing. Changes to the
+saved connection invalidate an open review. Native handoff remains unverified;
+manual reports and fresh MusicKit playlist-matching observations are separate.
+No new device integration or production connection was provisioned.
+
+The focused browser validation includes TV, Play Vamp, MusicKit evidence,
+Connections review, Home Assistant confirmation, and the existing multi-user
+connection test. A reproducible saved-location assertion in that combined test
+blocks the phase gate; see JARVIS_CHECKPOINT.md. Physical iPhone Shortcut execution
+and real Home Assistant device state still require device/account verification.

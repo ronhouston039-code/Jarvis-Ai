@@ -1,0 +1,129 @@
+/* Home presentation; voice, health, map and action controllers remain shared. */
+.jarvis-home.hud-dashboard {
+  min-width: 0; width: min(1440px, calc(100% - 36px)); min-height: calc(100dvh - 36px);
+  height: auto; margin: 18px auto; padding: 18px 24px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 22px; position: relative; overflow: visible;
+  color: #e3f5ff; background: radial-gradient(ellipse at 40% 42%, #05203966, transparent 55%), #020c19;
+  border: 1px solid #156397; border-radius: 22px; box-shadow: inset 0 0 3px #31bfff60, 0 0 28px #008cff12;
+}
+.jarvis-home .j-home-header { display: grid; grid-template-columns: 110px 1fr 110px; align-items: center; min-height: 48px; padding-bottom: 12px; border-bottom: 1px solid #10415a55; }
+.jarvis-home .hud-brand { justify-content: center; display: flex; }
+.jarvis-home .hud-brand h1 { font-size: clamp(22px, 3vw, 34px); font-weight: 600; letter-spacing: .34em; color: #7de7ff; margin: 0; text-shadow: 0 0 16px #00c6ff66; }
+.jarvis-home .j-home-header > button { width: 44px; height: 44px; color: #3bdaff; background: transparent; border: 0; display: grid; place-items: center; }
+.jarvis-home .j-home-header > a { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border: 1px solid #20a7da; border-radius: 8px; color: #5bdfff; font-size: 13px; }
+.jarvis-home .j-home-content { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-areas: 'greeting weather' 'core map' 'actions actions' 'chat chat'; gap: 20px; flex: 1; min-height: 0; }
+.jarvis-home .j-home-greeting,.jarvis-home .j-home-weather,.jarvis-home .j-home-map { border: 1px solid #155487; border-radius: 12px; background: linear-gradient(120deg,#03142a88,#031020dd); box-shadow: inset 0 0 12px #0975be0c; }
+.jarvis-home .j-home-greeting { grid-area: greeting; padding: 23px 24px; min-width: 0; }
+.jarvis-home .j-home-greeting h2 { border-left: 2px solid #33dfff; padding-left: 15px; margin: 0 0 10px; font-size: clamp(18px,2vw,25px); letter-spacing: .13em; text-transform: uppercase; font-weight: 600; }
+.jarvis-home .j-home-health { display: flex; flex-wrap: wrap; gap: 4px 8px; padding-left: 17px; font-size: 12px; letter-spacing: .06em; color: #37cbf8; }
+.jarvis-home .j-home-health section,.jarvis-home .j-home-health p { margin: 0; font-size: inherit; }
+.jarvis-home .j-home-health ul { font-size: 11px; padding: 0; list-style: none; color: #d1b378; }
+.jarvis-home .j-home-weather { grid-area: weather; width: min(100%,320px); justify-self: end; display: flex; align-items: center; padding: 16px; gap: 18px; color: #e3f5ff; text-decoration: none; min-width: 0; }
+.jarvis-home .j-home-weather > svg { width: 58px; height: 58px; flex-shrink: 0; color: #23d7ff; filter: drop-shadow(0 0 7px #00d5ff66); }
+.jarvis-home .j-home-weather p { margin: 0; font-size: 13px; line-height: 1.6; }
+.jarvis-home .j-home-core { grid-area: core; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; min-height: 360px; padding: 0; }
+.jarvis-home .j-home-sphere { position: relative; width: min(100%,420px); aspect-ratio: 1; height: auto; border: 0; background: radial-gradient(circle,#00cfff10,transparent 67%); overflow: visible; }
+.jarvis-home .neural-core { filter: drop-shadow(0 0 7px #00bfff77); }
+.jarvis-home .j-home-state-plate { min-width: 190px; margin-top: -12px; padding: 8px 20px; text-align: center; border: 1px solid #2cc8ff; background: #042339; clip-path: polygon(8% 0,92% 0,100% 50%,92% 100%,8% 100%,0 50%); color: #7de8ff; letter-spacing: .2em; font-size: 16px; box-shadow: inset 0 0 15px #12bfff2b; }
+.jarvis-home .hologram-live-status { margin: 8px 0 0; font-size: 11px; line-height: 1.4; color: #a0c5d6; text-align: center; }
+.jarvis-home .j-home-map { grid-area: map; display: flex; flex-direction: column; align-self: stretch; margin: 0; padding: 12px; min-height: 360px; overflow: hidden; }
+.jarvis-home .j-home-map h2 { color: #78dfff; font-size: 14px; letter-spacing: .13em; font-weight: 500; margin: 0 0 10px; }
+.jarvis-home .j-home-actions { grid-area: actions; display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 12px; margin: 0; }
+.jarvis-home .j-home-actions > * { min-height: 88px; padding: 13px 3px; border: 1px solid #176497; border-radius: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #e4f5ff; font-size: 13px; background: linear-gradient(145deg,#051a2b,#030e1d); text-decoration: none; box-shadow: inset 0 0 10px #119adc0a; }
+.jarvis-home .j-home-actions svg { width: 29px; height: 29px; color: #31d4ff; filter: drop-shadow(0 0 5px #1fd7ff44); }
+.jarvis-home button,.jarvis-home a { transition: border-color .18s ease, background-color .18s ease; cursor: pointer; }
+.jarvis-home button:hover,.jarvis-home a:hover { border-color: #47dfff; }
+.jarvis-home :is(button,a,textarea):focus-visible { outline: 2px solid #a8edff; outline-offset: 3px; }
+.jarvis-home .j-home-command { margin: 0; flex-shrink: 0; position: relative; }
+.jarvis-home .composer-area { width: 100%; max-width: none; margin: 0; }
+.jarvis-home .composer { display: flex; gap: 10px; align-items: center; padding: 10px 14px; min-height: 74px; border: 1px solid #21b5e6; border-radius: 40px; background: #041424; box-shadow: inset 0 0 20px #19a6d810; }
+.jarvis-home .composer::before { content: none; }
+.jarvis-home .composer textarea { min-width: 0; min-height: 44px; height: 44px; resize: none; padding: 12px 0; flex: 1; color: #e7f5ff; font-size: 16px; background: transparent; border: 0; }
+.jarvis-home .composer textarea::placeholder { color: #79b3d1; }
+.jarvis-home .j-home-keyboard { background: transparent; color: #56dcff; border: 0; font-size: 25px; min-width: 44px; min-height: 44px; }
+.jarvis-home .composer-actions { display: flex; flex-shrink: 0; gap: 12px; align-items: center; }
+.jarvis-home .composer .mic-button { position: static; transform: none; min-height: 54px; min-width: 54px; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle,#21c8ff,#0274bb); color: white; border: 1px solid #7ee8ff; box-shadow: 0 0 14px #15d4ff88; display: grid; place-items: center; }
+.jarvis-home .composer .send-button { min-width: 44px; min-height: 44px; background: transparent; color: #67cfff; border: 0; }
+.jarvis-home .composer-footnote { font-size: 10px; margin: 4px 14px; color: #95bacf; }
+.jarvis-home .composer-footnote span { display: none; }
+.jarvis-home .composer-area > .muted { display: none; }
+.jarvis-home .connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 14px 0; font-size: 12px; }
+.jarvis-home .read-aloud { min-height: 44px; }
+.jarvis-home .j-home-chat { grid-area: chat; max-height: 330px; overflow-y: auto; border: 1px solid #155487; border-radius: 12px; padding: 16px; position: relative; }
+.jarvis-home .j-home-close { width: 44px; height: 44px; float: right; display: grid; place-items: center; color: #6addff; background: transparent; border: 0; }
+.jarvis-home .j-home-more { position: absolute; right: 24px; bottom: 170px; width: min(520px,calc(100% - 48px)); max-height: 65dvh; overflow-y: auto; z-index: 30; padding: 18px; border: 1px solid #1595bf; border-radius: 14px; background: #031322; box-shadow: 0 10px 40px #0009; }
+.jarvis-home .j-home-more[hidden] { display: none; }
+.jarvis-home .j-home-more h2 { font-size: 16px; color: #79e6ff; margin: 12px 0; }
+.j-home-menu { display: flex; flex-direction: column; gap: 10px; }
+.j-home-menu > a { padding: 12px; min-height: 44px; color: #65dbff; }
+@media(min-width: 1000px) and (min-height: 780px) { .jarvis-home.hud-dashboard { max-height: calc(100dvh - 36px); } .jarvis-home .j-home-sphere { width: min(100%,44dvh); } }
+@media(max-width: 900px) { .jarvis-home.hud-dashboard { padding: 16px; gap: 16px; } .jarvis-home .j-home-content { gap: 14px; } .jarvis-home .j-home-actions { gap: 8px; } }
+@media(max-width: 640px) {
+  .jarvis-home.hud-dashboard { width: 100%; min-height: 100dvh; margin: 0; padding: max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border: 0; border-radius: 0; }
+  .jarvis-home .j-home-header { grid-template-columns: 44px 1fr 44px; padding: 0; }
+  .jarvis-home .j-home-header > a { border: 0; }
+  .jarvis-home .j-home-header > a span { display: none; }
+  .jarvis-home .hud-brand h1 { font-size: 24px; letter-spacing: .25em; }
+  .jarvis-home .j-home-content { grid-template-columns: minmax(0,1fr); grid-template-areas: 'greeting' 'core' 'weather' 'map' 'actions' 'chat'; }
+  .jarvis-home .j-home-greeting { padding: 18px 14px; }
+  .jarvis-home .j-home-greeting h2 { font-size: 17px; letter-spacing: .09em; }
+  .jarvis-home .j-home-health { font-size: 10px; }
+  .jarvis-home .j-home-sphere { width: min(100%,330px); }
+  .jarvis-home .j-home-core { min-height: 340px; }
+  .jarvis-home .j-home-weather { width: 100%; justify-self: stretch; padding: 16px; }
+  .jarvis-home .j-home-map { height: 290px; min-height: 290px; }
+  .jarvis-home .j-home-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .jarvis-home .j-home-actions > * { flex: 1 0 calc(25% - 8px); min-height: 80px; font-size: 11px; }
+  .jarvis-home .j-home-actions > :nth-child(-n+3) { flex-basis: calc(33.333% - 8px); }
+  .jarvis-home .composer { gap: 4px; padding: 8px; }
+  .jarvis-home .composer-actions { gap: 4px; }
+  .jarvis-home .composer .mic-button { min-width: 48px; min-height: 48px; width: 48px; height: 48px; }
+  .jarvis-home .composer textarea { font-size: 16px; }
+  .jarvis-home .j-home-more { position: fixed; inset: auto 16px max(110px,env(safe-area-inset-bottom)); width: auto; }
+}
+@media(prefers-reduced-motion: reduce) { .jarvis-home,.jarvis-home *,.j-home-menu * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+/* Retain the existing account menu without restoring the old navigation strip. */
+.jarvis-dashboard-account { position: fixed; z-index: 40; top: 2px; right: 4px; background: transparent; border: 0; }
+.jarvis-dashboard-account > div { height: 32px; padding: 0; gap: 0; }
+.jarvis-dashboard-account > div > a,.jarvis-dashboard-account > div > .hidden,.jarvis-dashboard-account > div > .flex-1,.jarvis-dashboard-account [aria-label="Toggle menu"],.jarvis-dashboard-account [data-testid="nav-user-name"],.jarvis-dashboard-account [aria-label="Account menu"] > svg { display: none; }
+.jarvis-dashboard-account [aria-label="Account menu"] { min-height: 32px; padding: 2px; }
+.jarvis-home .j-home-weather strong { font-size: 23px; display: block; font-weight: 500; }
+.jarvis-home .j-home-weather span { display: block; font-size: 12px; color: #b4d0e1; }
+@media(min-width: 641px) {
+  .jarvis-home.hud-dashboard { max-height: none; gap: 16px; }
+  .jarvis-home .j-home-content { gap: 16px; }
+  .jarvis-home .j-home-core { min-height: 350px; }
+  .jarvis-home .j-home-sphere { width: min(100%,350px); flex-shrink: 0; }
+  .jarvis-home .j-home-map { min-height: 350px; }
+}
+@media(min-width: 1000px) and (min-height: 780px) {
+  .jarvis-home.hud-dashboard { height: calc(100dvh - 36px); min-height: 0; }
+  .jarvis-home .j-home-content { grid-template-rows: 110px minmax(0,1fr) 88px; }
+  .jarvis-home .j-home-core,.jarvis-home .j-home-map { min-height: 0; }
+  .jarvis-home .j-home-sphere { width: min(100%,33dvh); }
+  .jarvis-home .j-home-state-plate { margin-top: -8px; }
+  .jarvis-home .j-home-content:has(.j-home-chat) { grid-template-rows: 110px 350px 88px auto; }
+  .jarvis-home.hud-dashboard:has(.j-home-chat) { height: auto; }
+}
+.jarvis-home .assistant-panel { width: 100%; border: 0; background: transparent; padding: 0; margin: 0; min-height: 0; text-align: center; }
+@media(max-width: 640px) {
+  .jarvis-home.hud-dashboard { padding-bottom: calc(165px + env(safe-area-inset-bottom)); }
+  .jarvis-home .j-home-command { position: fixed; z-index: 35; left: 0; right: 0; bottom: 0; padding: 8px max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); background: linear-gradient(transparent,#020c19 8%); }
+  .jarvis-home .j-home-command .chat-error { font-size: 12px; }
+}
+.jarvis-home .map-expand-control { display: grid; place-items: center; }
+.jarvis-home .j-home-keyboard { display: grid; place-items: center; }
+.jarvis-home .plexus-status { font-size: 11px; color: #53d9ff; letter-spacing: .15em; }
+.jarvis-home .plexus-user { font-size: 12px; color: #93bbdf; font-style: italic; }
+.jarvis-home .plexus-answer { font-size: 14px; max-height: 110px; overflow-y: auto; color: #e9f8ff; margin: 5px 0; }
+.jarvis-home .plexus-answer mark { color: #64ddff; background: transparent; }
+.jarvis-home .j-home-core .assistant-panel { position: absolute; bottom: 65px; left: 5%; width: 90%; padding: 7px; z-index: 2; border-radius: 8px; background: linear-gradient(transparent,#020c19e6); }
+@media(min-width: 1000px) and (max-height: 779px) {
+  .jarvis-home.hud-dashboard { height: calc(100dvh - 36px); min-height: 0; }
+  .jarvis-home .j-home-content { min-height: 0; grid-template-rows: 110px 350px 88px; overflow-y: auto; }
+  .jarvis-home .j-home-core,.jarvis-home .j-home-map { min-height: 0; }
+  .jarvis-home .j-home-sphere { width: 280px; }
+}
+@media(min-width: 1000px) { .jarvis-home .j-home-content { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #175378 transparent; } }
+@media(min-width: 1000px) and (min-height: 780px) { .jarvis-home .j-home-sphere { width: min(100%,calc(100dvh - 610px)); } }
+.jarvis-home .j-home-core .assistant-panel:empty { display: none; }

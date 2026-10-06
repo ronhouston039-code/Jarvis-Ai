@@ -23,6 +23,8 @@ import Navigation from '../../components/Navigation'
 import { useToast } from '@/components/ui'
 import { APP_NAME, SCOPE_ID } from '../../constants'
 import { schemas } from '../../schemas'
+import { TacticalMapProvider } from '../../components/maps/TacticalMapProvider'
+import { SystemHealthProvider } from '../../components/SystemHealthProvider'
 
 export default function AppLayout() {
   return (
@@ -73,7 +75,7 @@ function AuthBoot({ children }: { children: ReactNode }) {
       }
     >
       <RecordScope roomId={SCOPE_ID} schemas={schemas}>
-        {children}
+        <SystemHealthProvider><TacticalMapProvider>{children}</TacticalMapProvider></SystemHealthProvider>
       </RecordScope>
     </RecordProvider>
   )

@@ -1,3 +1,4 @@
+import { SystemHealthActivity } from "../../../components/SystemStatus";
 import { HomeKitActivity } from "../../../components/HomeKitActivity";
 import { useState } from "react";
 import { getAuthToken, useAuthProfileReady, useQuery } from "deepspace";
@@ -69,6 +70,7 @@ export default function PersonalPage() {
   return (
     <div className="personal-page">
       <p className="eyebrow">ONLY WHAT MATTERS</p>
+      <SystemHealthActivity />
       <HomeKitActivity />
       <h1>My space</h1>
       <p className="muted">

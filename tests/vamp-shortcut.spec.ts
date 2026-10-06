@@ -1,3 +1,4 @@
+import { openHomeMenu, mockHomeMapTiles, openHomeActivity } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
 import {
@@ -11,6 +12,10 @@ test.skip(loadAllTestAccounts().length < 1, "Requires test account");
 test.afterEach(cleanupVampConnections);
 
 async function prepareIPhone(page: Page, voice = false) {
+  await mockHomeMapTiles(page);
+  await page.route("**/api/health", r => r.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/jarvis/connections/home-assistant/config", r => r.fulfill({ json: { available: false, enabled: false } }));
+  await page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: { location: "Goldsboro", temperature: 70, feelsLike: 68, description: "Clear", retrievedAt: "2026-10-05T12:00:00Z" } }));
   await page.addInitScript(
     ({ voice }) => {
       Object.defineProperty(navigator, "userAgent", {
@@ -102,7 +107,7 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
   await saveVampConnection(user.page);
   await user.page.goto("/home");
   await user.page
-    .getByRole("button", { name: "Play Vamp", exact: true })
+    .getByRole("button", { name: "Music", exact: true })
     .click();
   const dialog = user.page.getByRole("dialog", {
     name: "Play Vamp",
@@ -123,6 +128,7 @@ test("iPhone Vamp quick action and music card review require explicit confirmati
       exact: true,
     }),
   ).toHaveCount(0);
+  await openHomeActivity(user.page);
   await user.page
     .getByRole("button", { name: "Review Play Vamp request", exact: true })
     .click();
@@ -152,6 +158,7 @@ test("iPhone Play Vamp text resolves the saved connection and stays requested un
   });
   await saveVampConnection(user.page);
   await user.page.goto("/home");
+  await openHomeMenu(user.page);
   await user.page.getByRole("button", { name: "CHAT", exact: true }).click();
   await user.page
     .getByRole("textbox", { name: "Message JARVIS", exact: true })
@@ -213,6 +220,7 @@ test("iPhone Play Vamp text resolves the saved connection and stays requested un
   expect(await launches(user.page)).toHaveLength(1);
   expect(llmRequests).toBe(0);
   await user.page.reload();
+  await openHomeActivity(user.page);
   await expect(
     user.page.getByText("User reported playback started: Vamp", {
       exact: true,
@@ -242,6 +250,7 @@ test("iPhone Vamp Talk intent opens review without an LLM call and speaks truthf
   });
   await saveVampConnection(user.page);
   await user.page.goto("/home");
+  await openHomeMenu(user.page);
   await user.page
     .getByRole("button", { name: "Start continuous voice session" })
     .click();
@@ -315,7 +324,7 @@ test("iPhone Vamp Not Playing records an unconfirmed outcome without retry or LL
   await saveVampConnection(user.page);
   await user.page.goto("/home");
   await user.page
-    .getByRole("button", { name: "Play Vamp", exact: true })
+    .getByRole("button", { name: "Music", exact: true })
     .click();
   await user.page
     .getByRole("dialog", { name: "Play Vamp" })

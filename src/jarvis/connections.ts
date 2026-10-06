@@ -19,7 +19,7 @@ export const shortcutInput = z
 export function shortcutUrl(name: string): string {
   return `shortcuts://run-shortcut?name=${encodeURIComponent(name)}`;
 }
-export async function currentWeather(latitude: number, longitude: number) {
+export async function currentWeather(latitude: number, longitude: number, signal?: AbortSignal) {
   const coordinates = locationInput
     .pick({ latitude: true, longitude: true })
     .parse({ latitude, longitude });
@@ -35,7 +35,7 @@ export async function currentWeather(latitude: number, longitude: number) {
     forecast_days: "3",
     timezone: "auto",
   }).toString();
-  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error("weather_unavailable");
   const data = (await response.json()) as Record<string, unknown>;
   return {

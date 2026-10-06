@@ -1,4 +1,8 @@
 import type { CollectionSchema, RolePermissions } from "deepspace/schema";
+import {
+  DEFAULT_SETTINGS_TIMEZONE,
+  DEFAULT_TEMPERATURE_UNIT,
+} from "../jarvis/contracts";
 
 const none: RolePermissions = {
   read: false,
@@ -149,12 +153,13 @@ export const personalSchemas: CollectionSchema[] = [
     uniqueOn: ["userId"],
     columns: [
       userColumn,
+      { name: "liveWebSearch", storage: "number", interpretation: "boolean", default: 1 },
       { name: "proactive", storage: "text", interpretation: "plain", default: "" },
       {
         name: "timezone",
         storage: "text",
         interpretation: "plain",
-        default: "UTC",
+        default: DEFAULT_SETTINGS_TIMEZONE,
       },
       {
         name: "responseMode",
@@ -165,8 +170,23 @@ export const personalSchemas: CollectionSchema[] = [
         },
         default: "normal",
       },
+      {
+        name: "temperatureUnit",
+        storage: "text",
+        interpretation: {
+          kind: "select",
+          options: ["fahrenheit", "celsius"],
+        },
+        default: DEFAULT_TEMPERATURE_UNIT,
+      },
     ],
-    permissions: own(true, ["timezone", "responseMode", "proactive"]),
+    permissions: own(true, [
+      "timezone",
+      "responseMode",
+      "temperatureUnit",
+      "liveWebSearch",
+      "proactive",
+    ]),
   },
   {
     name: "notifications",

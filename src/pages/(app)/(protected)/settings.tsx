@@ -1,74 +1,99 @@
+import { useTacticalMap } from "../../../components/maps/TacticalMapProvider";
+import { WebSearchSettings } from "../../../components/WebSearchSettings";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { signOut, useQuery, useUser } from "deepspace";
+import { ChevronLeft, ChevronRight, Settings, UserRound, Volume2, MessageSquare, Mic, MapPin, Tv, Bell, Monitor, ShieldCheck, Activity } from "lucide-react";
+import { SystemStatus } from "../../../components/SystemStatus";
+import { useSystemHealth } from "../../../components/SystemHealthProvider";
 import { FishVoiceSettings } from "../../../components/FishVoiceSettings";
 import { VoiceActivation } from "../../../components/VoiceActivation";
-import { BriefingPreview } from "../../../components/BriefingPreview";
 import { ProactivePreferences } from "../../../components/ProactivePreferences";
 import { disconnectAppleMusic } from "../../../components/apple-music";
-import { signOut, useUser } from "deepspace";
 import { JarvisPreferences } from "../../../components/JarvisPreferences";
 import { Button } from "../../../components/ui";
+import "../../../components/jarvis-settings.css";
+import { WeatherConnect } from "../../../components/WeatherConnect";
+
+const sections = [
+  ["general", "General", UserRound], ["voice", "Voice & Speech", Volume2],
+  ["talk", "Talk Mode", MessageSquare], ["wake", "Wake JARVIS", Mic],
+  ["location", "Location & Maps", MapPin], ["devices", "Connected Devices", Tv],
+  ["notifications", "Notifications", Bell], ["interface", "Interface", Monitor],
+  ["privacy", "Privacy & Security", ShieldCheck], ["system", "System", Activity],
+] as const;
+function Group({ id, children }: { id: typeof sections[number][0]; children: ReactNode }) {
+  const [, title, Icon] = sections.find(s => s[0] === id)!;
+  return <section className="settings-group" id={`settings-${id}`} aria-labelledby={`settings-${id}-title`}>
+    <h2 id={`settings-${id}-title`}><Icon aria-hidden="true" />{title}</h2>
+    <div className="settings-group-body">{children}</div>
+  </section>;
+}
+function Row({ label, value, to }: { label: string; value?: string; to?: string }) {
+  const content = <><span className="settings-row-label">{label}</span>{value && <span className="settings-row-value">{value}</span>}{to && <ChevronRight aria-hidden="true" />}</>;
+  return to ? <Link className="settings-row" to={to}>{content}</Link> : <div className="settings-row">{content}</div>;
+}
 export default function SettingsPage() {
   const { user } = useUser();
-  return (
-    <div className="personal-page">
-      <p className="eyebrow">YOUR ASSISTANT, YOUR WAY</p>
-      <h1>Settings</h1>
-      <section className="personal-card">
-        <div>
-          <h2 className="!mt-0">Your account</h2>
-          <p>{user?.name}</p>
-          <p className="muted text-sm">{user?.email}</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={async () => {
-            await disconnectAppleMusic();
-            await signOut();
-          }}
-        >
-          Sign out
-        </Button>
-      </section>
-      <h2>Personal preferences</h2>
-      <JarvisPreferences />
-      <ProactivePreferences />
-      <BriefingPreview />
-      <VoiceActivation />
-      <FishVoiceSettings />
-      <h2>Voice on iPhone</h2>
-      <p className="muted leading-7">
-        Tap the microphone in a conversation to dictate. Review the transcript,
-        then send. Tap Listen beneath a reply to use the configured Fish Audio
-        voice. Fish Audio API credits are required; device speech is used if
-        Fish fails. Turn voice on at the bottom of the dashboard to
-        automatically hear new replies. Tap once each time you open the app to
-        activate device playback, and keep media volume up. If Safari dictation
-        is unavailable, use your keyboard’s microphone.
-      </p>
-      <h2>Keep JARVIS close</h2>
-      <p className="muted leading-7">
-        Open this app in Safari. Tap Share, then Add to Home Screen. JARVIS
-        listens only when you activate voice input; background wake-word
-        listening is not enabled.
-      </p>
-      <h2>Connected services</h2>
-      <a className="connection-action" href="/connections">
-        Manage connections
-      </a>
-      <p className="muted leading-7">
-        Your account uses Groq when configured; other accounts use their own
-        DeepSpace AI credits. Credentials stay encrypted on the server. Fish
-        Audio API credits are separate from subscription credits. Live weather,
-        news, and Wikipedia lookups are available. Add your location, Apple Home
-        controls and Apple Music shortcuts in Connections. Email and calendar
-        are not connected.
-      </p>
-      <h2>Privacy</h2>
-      <p className="muted leading-7">
-        Conversations are sent to your selected AI provider to generate replies.
-        Device dictation may use your phone’s speech service. Device speech uses
-        your browser or iPhone speech service. Personal memories are added only
-        when you ask. Manage and delete your data in My space.
-      </p>
+  const tacticalMap = useTacticalMap();
+  const { services } = useSystemHealth();
+  const locations = useQuery<{ label: string }>("locations", { where: { enabled: 1 }, limit: 1 });
+  const [accountError, setAccountError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  return <div className="jarvis-settings">
+    <header className="settings-header">
+      <Link to="/home" aria-label="Back to JARVIS"><ChevronLeft aria-hidden="true" /></Link>
+      <div><span className="settings-wordmark">JARVIS</span><h1>Settings</h1></div>
+      <Settings className="settings-header-icon" aria-hidden="true" />
+    </header>
+    <div className="settings-layout">
+      <nav className="settings-sections" aria-label="Settings sections">
+        {sections.map(([id, title, Icon]) => <a key={id} href={`#settings-${id}`}><Icon aria-hidden="true" /><span>{title}</span><ChevronRight aria-hidden="true" /></a>)}
+      </nav>
+      <div className="settings-groups">
+        <Group id="general"><Row label="Name I Call You" value="Sir" /><JarvisPreferences /></Group>
+        <Group id="voice"><VoiceActivation /><FishVoiceSettings /></Group>
+        <Group id="talk">
+          <p className="settings-note">Start and stop a continuous voice session from the dashboard. Sessions stop when you leave or background the app.</p>
+          <Row label="Open Talk Mode controls" to="/home?panel=voice" />
+        </Group>
+        <Group id="wake">
+          <Row label="Wake phrase" value="Hey Jarvis" />
+          <p className="settings-note">Browser speech recognition runs after dashboard consent while the app is open. Local wake-word detection is not configured.</p>
+          <Row label="Open Wake JARVIS controls" to="/home?panel=voice" />
+        </Group>
+        <Group id="location">
+          <Row label="Default weather city" value={locations.status !== "ready" ? "Checking…" : locations.records[0]?.data.label ?? "Goldsboro, NC"} to="/connections?tab=location" />
+          <details><summary>Weather source & location controls</summary><WeatherConnect /></details>
+          <Row label="Location access" value="Ask when requested" />
+          <Button variant="outline" onClick={() => tacticalMap.request()}>Open tactical map</Button>
+          <p className="settings-note">Live sharing runs only while the tactical map is open, after Show My Location is tapped. Saved weather locations are managed separately in Connections.</p>
+        </Group>
+        <Group id="devices">
+          {([ ["tv", "TV", "/connections?tab=apps"], ["music", "Music", "/connections?tab=music"], ["home", "Smart Home", "/connections?tab=home"] ] as const).map(([id, label, to]) => {
+            const service = services.find(s => s.id === id)!;
+            return <Row key={id} label={label} value={service.status === "online" ? "Verified online" : service.enabled ? service.status === "unknown" ? "Configured · unverified" : service.status : "Not connected"} to={to} />;
+          })}
+          <p className="settings-note">Shortcut handoff does not verify device or playback state.</p>
+        </Group>
+        <Group id="notifications"><ProactivePreferences /></Group>
+        <Group id="interface"><Row label="Cinematic Focus" value="Open" to="/home?mode=focus" /><Row label="Motion" value="Follows device Reduce Motion" /></Group>
+        <Group id="privacy">
+          <WebSearchSettings />
+          <Row label="Memories & activity" to="/personal" />
+          <Row label="Manage or disconnect services" to="/connections" />
+          <details><summary>How your data is used</summary><p className="settings-note">Chat uses your selected AI provider. Requested Fish Audio speech sends the spoken text to Fish Audio; device voice and dictation use browser or device services. Memories are saved when requested. Service credentials remain server-side.</p></details>
+          <div className="settings-account"><span>{user?.name}</span><span className="settings-note">{user?.email}</span></div>
+          <Button variant="outline" disabled={signingOut} onClick={async () => {
+            setSigningOut(true); setAccountError("");
+            try { await disconnectAppleMusic(); await signOut(); }
+            catch { setAccountError("Could not sign out. Please try again."); }
+            finally { setSigningOut(false); }
+          }}>Sign out</Button>
+          {accountError && <p role="status">{accountError}</p>}
+        </Group>
+        <Group id="system"><SystemStatus details /></Group>
+      </div>
     </div>
-  );
+  </div>;
 }

@@ -271,9 +271,7 @@ export class HomeAssistantProvider {
           ? new Date(state.last_updated).toISOString()
           : null,
       actions,
-      confirmationActions: actions.filter((action) =>
-        this.sensitive(state, { deviceId: id, action } as HomeAction),
-      ),
+      confirmationActions: actions.filter((action) => action !== "status"),
       ...(finite(a.brightness)
         ? { brightness: Math.round((a.brightness / 255) * 100) }
         : {}),
@@ -376,7 +374,7 @@ export class HomeAssistantProvider {
     const prepared = await this.prepare(input);
     const { action, device, state, unit } = prepared;
     if (action.action === "status") return { status: "completed", device };
-    if (prepared.sensitive && !confirmed)
+    if (!confirmed)
       throw new Error("home_assistant_confirmation_required");
     const domain = state.entity_id.split(".")[0];
     const payload: Record<string, unknown> = { entity_id: state.entity_id };

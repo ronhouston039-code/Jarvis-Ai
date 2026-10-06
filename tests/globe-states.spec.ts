@@ -1,3 +1,4 @@
+import { openHomeMenu, mockHomeMapTiles } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
 import {
@@ -33,6 +34,11 @@ type VoiceBoundary = {
 
 /** Only browser/provider boundaries are replaced; state changes use the real UI. */
 async function installVoiceBoundaries(page: Page, iPhone = false) {
+  await mockHomeMapTiles(page);
+  await page.route("**/api/tts", r => r.fulfill({ status: 503, json: { provider: "fish_audio", category: "provider-error", providerStatus: 503 } }));
+  await page.route("**/api/health", r => r.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/jarvis/connections/home-assistant/config", r => r.fulfill({ json: { enabled: false, available: false } }));
+  await page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: { location: "Goldsboro", temperature: 70, feelsLike: 68, description: "Clear", retrievedAt: "2026-10-05T12:00:00Z" } }));
   await page.addInitScript(
     ({ iPhone }) => {
       const state = {
@@ -80,7 +86,7 @@ async function installVoiceBoundaries(page: Page, iPhone = false) {
           },
           speak(utterance: SpeechSynthesisUtterance) {
             state.utterance = utterance;
-            utterance.onstart?.(new Event("start") as SpeechSynthesisEvent);
+            setTimeout(() => utterance.onstart?.(new Event("start") as SpeechSynthesisEvent), 20);
           },
         },
       });
@@ -162,6 +168,7 @@ async function expectState(page: Page, state: LiveState) {
     "data-state",
     state,
   );
+  if (["listening", "thinking", "speaking"].includes(state)) await expect(page.getByLabel("JARVIS runtime state", { exact: true })).toHaveText(state.toUpperCase());
   const status = page.locator('.hologram-live-status[role="status"]');
   await expect(status).toBeVisible();
   const captions: Record<LiveState, RegExp> = {
@@ -207,11 +214,20 @@ test("live globe follows listening, thinking, speaking and microphone interrupti
   await installVoiceBoundaries(page);
   const greeting = await holdGreeting(page);
   await page.goto("/home");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   const canvas = globeCanvas(page);
   await expect(canvas).toBeVisible();
   await expectState(page, "idle");
+  // Phase 2 requires actual onset evidence before the saved operational greeting.
+  // Browser speech events are asynchronous, as they are on Safari.
+  await page.getByRole("button", { name: "Voice off · turn on", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Stop speaking", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Stop speaking", exact: true }).click();
+  await expectState(page, "idle");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   const rotation = await canvas.getAttribute("data-rotation");
   const talk = page.getByRole("button", { name: "Talk mode", exact: true });
+  await openHomeMenu(page);
   await talk.click();
   await expect.poll(() => voiceStarts(page)).toBe(1);
   await expectState(page, "listening");
@@ -260,6 +276,7 @@ test("live globe follows listening, thinking, speaking and microphone interrupti
         (window as unknown as { globeVoice: VoiceBoundary }).globeVoice.pauses,
     ),
   ).toBeGreaterThan(pauses);
+  await openHomeMenu(page);
   await talk.click();
   await expectState(page, "idle");
   await expect(canvas).toHaveAttribute("data-audio-source", "none");
@@ -279,6 +296,7 @@ test("live globe device fallback pulses only during speech and clears on interru
     route.fulfill({ status: 503, json: { error: "voice_unavailable" } }),
   );
   await page.goto("/home");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   const canvas = globeCanvas(page);
   const mic = page.getByRole("button", {
     name: "Start voice input",
@@ -340,8 +358,9 @@ test("live globe pulses action requested only after approved iPhone Play Vamp di
   await installVoiceBoundaries(page, true);
   await saveVampConnection(page);
   await page.goto("/home");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   await expectState(page, "idle");
-  await page.getByRole("button", { name: "Play Vamp", exact: true }).click();
+  await page.getByRole("button", { name: "Music", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Play Vamp", exact: true });
   await expect(dialog).toBeVisible();
   await expectState(page, "idle");
@@ -385,6 +404,7 @@ test("live globe reduced motion freezes rotation and scaling while states keep d
   await saveVampConnection(page);
   const greeting = await holdGreeting(page);
   await page.goto("/home");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   const canvas = globeCanvas(page);
   await expect(canvas).toBeVisible();
   const colors = new Set<string>();
@@ -436,7 +456,7 @@ test("live globe reduced motion freezes rotation and scaling while states keep d
     .getByRole("button", { name: "Stop speaking", exact: true })
     .click();
   await expectState(page, "idle");
-  await page.getByRole("button", { name: "Play Vamp", exact: true }).click();
+  await page.getByRole("button", { name: "Music", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Play Vamp", exact: true })
     .getByRole("button", { name: "Send Play Request", exact: true })
@@ -455,8 +475,10 @@ test("live globe releases repeated Focus sessions, stops rendering while hidden 
   const page = user.page;
   await installVoiceBoundaries(page);
   await page.goto("/home");
+  await expect(page.getByRole("region", { name: "System health", exact: true })).toContainText("SYSTEMS FULLY OPERATIONAL");
   const canvas = globeCanvas(page);
   for (let cycle = 0; cycle < 2; cycle++) {
+    await openHomeMenu(page);
     await page
       .getByRole("button", { name: "Full Screen Focus", exact: true })
       .click();
@@ -481,12 +503,15 @@ test("live globe releases repeated Focus sessions, stops rendering while hidden 
   }
   const talk = page.getByRole("button", { name: "Talk mode", exact: true });
   for (let cycle = 0; cycle < 2; cycle++) {
+    await openHomeMenu(page);
     await talk.click();
     await expectState(page, "listening");
+    await openHomeMenu(page);
     await talk.click();
     await expectState(page, "idle");
     await expect(canvas).toHaveCount(1);
   }
+  await openHomeMenu(page);
   await talk.click();
   await expect.poll(() => voiceStarts(page)).toBe(3);
   await expectState(page, "listening");
@@ -507,6 +532,7 @@ test("live globe releases repeated Focus sessions, stops rendering while hidden 
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect(canvas).toHaveAttribute("data-paused", "true");
+  await openHomeMenu(page);
   await expect(talk).toHaveAttribute("aria-pressed", "false");
   const hidden = await page.evaluate(() => ({
     renders: (window as unknown as { globeVoice: VoiceBoundary }).globeVoice

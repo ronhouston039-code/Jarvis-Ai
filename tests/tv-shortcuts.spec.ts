@@ -1,9 +1,14 @@
+import { openHomeMenu, mockHomeMapTiles } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
 
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
 
 async function prepareIPhone(page: Page, voice = false) {
+  await mockHomeMapTiles(page);
+  await page.route("**/api/health", r => r.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/jarvis/connections/home-assistant/config", r => r.fulfill({ json: { available: false, enabled: false } }));
+  await page.route("**/api/jarvis/connections/weather", r => r.fulfill({ json: { location: "Goldsboro", temperature: 70, feelsLike: 68, description: "Clear", retrievedAt: "2026-10-05T12:00:00Z" } }));
   await page.addInitScript(
     ({ voice }) => {
       Object.defineProperty(navigator, "userAgent", {
@@ -94,6 +99,7 @@ test("iPhone TV actions require confirmation and cancellation launches nothing",
   const [user] = await users(1);
   await prepareIPhone(user.page);
   await user.page.goto("/home");
+  await user.page.getByRole("button", { name: "TV", exact: true }).click();
   await user.page
     .getByRole("button", { name: "Turn Off TV", exact: true })
     .click();
@@ -108,6 +114,7 @@ test("iPhone TV actions require confirmation and cancellation launches nothing",
       exact: true,
     }),
   ).toHaveCount(0);
+  await user.page.getByRole("button", { name: "TV", exact: true }).click();
   await user.page
     .getByRole("button", { name: "Turn On TV", exact: true })
     .click();
@@ -131,6 +138,7 @@ test("TV shortcut handoff stays unverified until the user confirms the result", 
   const [user] = await users(1);
   await prepareIPhone(user.page);
   await user.page.goto("/home");
+  await user.page.getByRole("button", { name: "TV", exact: true }).click();
   await user.page
     .getByRole("button", { name: "Turn Off TV", exact: true })
     .click();
@@ -178,6 +186,7 @@ test("iPhone Talk TV intent opens the native confirmation without an LLM call", 
     });
   });
   await user.page.goto("/home");
+  await openHomeMenu(user.page);
   await user.page
     .getByRole("button", { name: "Start continuous voice session" })
     .click();

@@ -11,6 +11,50 @@ export const zoneSchema = z
       return false;
     }
   }, "Use a valid IANA timezone");
+
+export const DEFAULT_SETTINGS_TIMEZONE = "America/New_York";
+export const temperatureUnitSchema = z.enum(["fahrenheit", "celsius"]);
+export type TemperatureUnit = z.infer<typeof temperatureUnitSchema>;
+export const DEFAULT_TEMPERATURE_UNIT: TemperatureUnit = "fahrenheit";
+export function resolveTemperatureUnit(value: unknown): TemperatureUnit {
+  const parsed = temperatureUnitSchema.safeParse(value);
+  return parsed.success ? parsed.data : DEFAULT_TEMPERATURE_UNIT;
+}
+
+const proactiveSchema = z
+  .object({
+    dailyBriefing: z.boolean(),
+    calendarAlerts: z.boolean(),
+    weatherAlerts: z.boolean(),
+    focusBlocks: z.enum(["ask", "off"]),
+    emailReminders: z.boolean(),
+    marketing: z.boolean(),
+    quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  })
+  .strict();
+
+/** Partial updates preserve unrelated saved settings in the existing record. */
+export const preferencesPatchSchema = z
+  .object({
+    timezone: zoneSchema.optional(),
+    responseMode: z.enum(["normal", "brief", "technical"]).optional(),
+    temperatureUnit: temperatureUnitSchema.optional(),
+    liveWebSearch: z.boolean().optional(),
+    proactive: z
+      .string()
+      .max(1000)
+      .refine((value) => {
+        try {
+          return proactiveSchema.safeParse(JSON.parse(value)).success;
+        } catch {
+          return false;
+        }
+      })
+      .optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined));
 export const reminderSchema = z
   .object({
     title: z.string().trim().min(1).max(500),

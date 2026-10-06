@@ -1,9 +1,15 @@
+import { openHomeMenu, mockHomeMapTiles } from "./helpers/home-controls";
 import { expect, loadAllTestAccounts, test } from "deepspace/testing";
 import type { Page } from "@playwright/test";
 
 test.skip(loadAllTestAccounts().length < 1, "Requires test account");
 
 async function installVoiceMocks(page: Page, device = false) {
+  await mockHomeMapTiles(page);
+  // The suite tests voice, not the live weather of a previously saved location.
+  await page.route("**/api/jarvis/connections/weather", route => route.fulfill({ json: {
+    location: "Test location", temperature: 70, feelsLike: 68, retrievedAt: "2026-10-05T12:00:00Z", description: "Clear", high: 75, low: 55,
+  } }));
   await page.addInitScript(
     ({ device }) => {
       const state = window as unknown as {
@@ -101,6 +107,7 @@ test("wake mode requires consent, ignores ambient speech and expires bare activa
     name: "Wake Jarvis",
     exact: true,
   });
+  await openHomeMenu(user.page);
   await wake.click();
   const consent = user.page.getByRole("dialog", {
     name: /Enable.*Jarvis.*wake listening/,
@@ -112,12 +119,16 @@ test("wake mode requires consent, ignores ambient speech and expires bare activa
     ),
   ).toBe(0);
   await consent.getByRole("button", { name: "Not now", exact: true }).click();
+  await openHomeMenu(user.page);
   await expect(wake).toHaveAttribute("aria-pressed", "false");
+  await openHomeMenu(user.page);
   await wake.click();
   await consent
     .getByRole("button", { name: "Enable wake listening", exact: true })
     .click();
+  await openHomeMenu(user.page);
   await expect(wake).toHaveAttribute("aria-pressed", "true");
+  await user.page.getByRole("dialog", { name: "JARVIS menu", exact: true }).getByRole("button", { name: "Close", exact: true }).click();
   await user.page.waitForFunction(
     () => (window as unknown as { voiceStarts: number }).voiceStarts === 1,
   );
@@ -157,6 +168,7 @@ test("wake mode requires consent, ignores ambient speech and expires bare activa
     });
     document.dispatchEvent(new Event("visibilitychange"));
   });
+  await openHomeMenu(user.page);
   await expect(wake).toHaveAttribute("aria-pressed", "false");
   expect(
     await user.page.evaluate(() =>
@@ -179,6 +191,7 @@ test("ambient transcripts do not extend wake listening beyond its inactivity tim
     name: "Wake Jarvis",
     exact: true,
   });
+  await openHomeMenu(user.page);
   await wake.click();
   await user.page
     .getByRole("button", { name: "Enable wake listening", exact: true })
@@ -189,6 +202,7 @@ test("ambient transcripts do not extend wake listening beyond its inactivity tim
   await user.page.clock.fastForward(119000);
   await utter(user.page, "unrelated room conversation");
   await user.page.clock.fastForward(2700);
+  await openHomeMenu(user.page);
   await expect(wake).toHaveAttribute("aria-pressed", "false");
   expect(
     await user.page.evaluate(() =>
@@ -222,15 +236,17 @@ for (const device of [false, true]) {
     await user.page.route("**/api/jarvis/capabilities", (route) =>
       route.fulfill({ json: { fishVoice: false } }),
     );
-    await user.page.route("**/api/jarvis/voice/greeting", (route) =>
+    const playback = (route: import("@playwright/test").Route) =>
       device
         ? route.fulfill({ status: 503, json: { error: "voice_unavailable" } })
         : route.fulfill({
             contentType: "audio/mpeg",
             body: Buffer.from(startupAudio, "base64"),
-          }),
-    );
+          });
+    await user.page.route("**/api/jarvis/voice/greeting", playback);
+    await user.page.route("**/api/tts", playback);
     await user.page.goto("/home");
+    await openHomeMenu(user.page);
     await user.page
       .getByRole("button", { name: "Start continuous voice session" })
       .click();

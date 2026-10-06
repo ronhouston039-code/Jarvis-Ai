@@ -144,7 +144,7 @@ export async function handleHomeAssistant(
     action = parsed.data;
     try {
       const prepared = await provider.prepare(action);
-      if (prepared.sensitive) {
+      if (prepared.action.action !== "status") {
         const token = crypto.randomUUID() + crypto.randomUUID();
         const fingerprint = await provider.fingerprint();
         sql.exec("DELETE FROM approvals WHERE expires<?", Date.now());
